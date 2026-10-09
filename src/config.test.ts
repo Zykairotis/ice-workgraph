@@ -28,3 +28,32 @@ describe("subagents routing config", () => {
     });
   });
 });
+
+describe("native ICE subagents config", () => {
+  const resolve = (value: string | undefined) => {
+    const mock = makeMockPi();
+    mock.setFlag("ice-workgraph-ice-subagents", value);
+    return resolveConfig(asExtensionAPI(mock)).iceSubagentsExecutor;
+  };
+
+  it("is disabled by default and enables the built-in agents with true", () => {
+    expect(resolve(undefined)).toBeUndefined();
+    expect(resolve("false")).toBeUndefined();
+    expect(resolve("true")).toEqual({
+      enabled: true,
+      agents: { planner: "plan", implementer: "worker", reviewer: "review", revision: "worker" },
+      models: {},
+    });
+  });
+
+  it("overrides agents and models per role and rejects malformed input", () => {
+    expect(resolve('{"agents":{"reviewer":"strict-review"},"models":{"reviewer":"omni/other"}}')).toEqual({
+      enabled: true,
+      agents: { planner: "plan", implementer: "worker", reviewer: "strict-review", revision: "worker" },
+      models: { reviewer: "omni/other" },
+    });
+    expect(resolve('{"agents":{"reviewer":"Bad Name"}}')).toBeUndefined();
+    expect(resolve('{"agents":[]}')).toBeUndefined();
+    expect(resolve("not json")).toBeUndefined();
+  });
+});

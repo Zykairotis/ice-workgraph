@@ -18,6 +18,7 @@ import { bdBinaryAvailable, ensureWorkspace, ready, show } from "./bd.ts";
 import { heldLeases, type HeldLease } from "./lease.ts";
 import {
   attemptOf,
+  isLifecycleV1,
   lastVerdictOf,
   phaseOf,
   workflowRunIdOf,
@@ -41,6 +42,14 @@ export interface GraphState {
   readyCount: number;
   /** Top {@link READY_RENDER_LIMIT} ready issues. */
   readyTop: BeadsIssue[];
+  /** Approved lifecycle-v1 issues in phase ready (dispatchable). */
+  approvedCount: number;
+  /** Top {@link READY_RENDER_LIMIT} approved, dispatchable issues. */
+  approvedTop: BeadsIssue[];
+  /** Ready-pool issues without lifecycle metadata, awaiting ice_workgraph_approve. */
+  awaitingApprovalCount: number;
+  /** Top {@link READY_RENDER_LIMIT} issues awaiting approval. */
+  awaitingApprovalTop: BeadsIssue[];
   /** Clock reading when this state was probed. */
   fetchedAt: number;
 }
@@ -76,6 +85,10 @@ async function probeGraphState(cwd: string, nowMs: number): Promise<GraphState> 
     initialized: false,
     readyCount: 0,
     readyTop: [],
+    approvedCount: 0,
+    approvedTop: [],
+    awaitingApprovalCount: 0,
+    awaitingApprovalTop: [],
     fetchedAt: nowMs,
   };
   // Distinguish bd-missing (cached spawnSync probe, no subprocess) from
@@ -91,10 +104,16 @@ async function probeGraphState(cwd: string, nowMs: number): Promise<GraphState> 
     // `-n 0` is unlimited (verified against bd 1.1.2): full count in one
     // call, render capped at READY_RENDER_LIMIT.
     const pool = await ready(cwd, 0);
+    const approved = pool.filter((issue) => isLifecycleV1(issue) && phaseOf(issue) === "ready");
+    const awaitingApproval = pool.filter((issue) => !isLifecycleV1(issue));
     return {
       initialized: true,
       readyCount: pool.length,
       readyTop: pool.slice(0, READY_RENDER_LIMIT),
+      approvedCount: approved.length,
+      approvedTop: approved.slice(0, READY_RENDER_LIMIT),
+      awaitingApprovalCount: awaitingApproval.length,
+      awaitingApprovalTop: awaitingApproval.slice(0, READY_RENDER_LIMIT),
       fetchedAt: nowMs,
     };
   } catch {
@@ -142,6 +161,14 @@ async function cachedHeldIssueView(
   }
   heldViewCache.set(key, { view, fetchedAt: nowMs });
   return view;
+}
+
+/** Drop the cached graph state for `cwd` after a mutation so the next read re-probes. */
+export function invalidateGraphState(cwd: string): void {
+  cache.delete(cwd);
+  for (const key of heldViewCache.keys()) {
+    if (key.startsWith(`${cwd}\u0000`)) heldViewCache.delete(key);
+  }
 }
 
 /**

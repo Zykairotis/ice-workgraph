@@ -8,6 +8,7 @@
  * directly via the `"ice": { "extensions": ["./src/index.ts"] }` manifest.
  */
 import type { ExtensionAPI } from "@zykairotis/ice-coding-agent";
+import { registerIceSubagentsExecutor } from "./adapters/ice-subagents.ts";
 import { registerInSessionExecutor } from "./adapters/in-session.ts";
 import { isPiSubagentProcess, registerPiSubagentsExecutor } from "./adapters/pi-subagents.ts";
 import { bdBinaryAvailable, bindExec } from "./bd.ts";
@@ -20,6 +21,7 @@ import { MIN_POLL_MS } from "./dispatch.ts";
 import { noteSessionId, setWorkerIdOverride } from "./identity.ts";
 import { registerSweep } from "./sweep.ts";
 import { registerWorkgraphTools } from "./tools.ts";
+import { registerWorkgraphView } from "./view.ts";
 
 export default function iceWorkgraph(pi: ExtensionAPI): void {
   registerConfigFlags(pi);
@@ -37,6 +39,11 @@ export default function iceWorkgraph(pi: ExtensionAPI): void {
   // on `compatInSessionExecutor` (default true) at every event, so a
   // disabled adapter never offers.
   registerInSessionExecutor(pi, { getConfig: () => resolveConfig(pi) });
+
+  // Native ICE Subagents V2 executor (opt-in --ice-workgraph-ice-subagents).
+  // Gated per event on config and on the host publishing its controller, so a
+  // disabled adapter or an older ICE never offers.
+  registerIceSubagentsExecutor(pi, { getConfig: () => resolveConfig(pi) });
 
   // The OPTIONAL pi-subagents bridge (phase 5) — DOUBLE-gated: this outer
   // gate never calls the register function unless `subagentsExecutor` is
@@ -85,6 +92,7 @@ export default function iceWorkgraph(pi: ExtensionAPI): void {
   });
 
   registerContextInjection(pi);
+  registerWorkgraphView(pi);
 
   pi.on("session_start", (_event, ctx) => {
     // Probe bd availability up front (the tools throw a one-line install

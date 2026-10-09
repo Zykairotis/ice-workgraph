@@ -1,63 +1,52 @@
 # Native ICE subagent executor: integration contract
 
-Status: not shipped. ICE Workgraph ships no native ICE subagent executor. The
-inherited `pi-subagents` event bridge remains an optional, disabled-by-default
-legacy adapter (`--ice-workgraph-subagents-executor`); its upstream event
-vocabulary is not part of ICE's subagent API and must not be presented as an
-ICE V2 adapter.
+Status: implemented and opt-in (`--ice-workgraph-ice-subagents`). The inherited
+`pi-subagents` event bridge stays a separate, disabled-by-default legacy adapter
+and is not an ICE V2 adapter.
 
-## What ICE Subagents V2 exposes today
+## ICE surface used
 
-Reviewed against `@zykairotis/ice-coding-agent` 0.83.0
-(`packages/coding-agent/src/subagents/`, exported from `src/index.ts`):
+ICE Subagents V2 publishes a versioned controller on the shared `ice.events`
+object under `Symbol.for("ice.subagents.controller.v1")` (exported by
+`@zykairotis/ice-coding-agent` as `getIceSubagentController` and
+`ICE_SUBAGENT_CONTROLLER_KEY`). The adapter declares the v1 shape structurally
+and reads the symbol, so older ICE hosts load Workgraph unchanged and simply
+receive no offer.
 
-| Surface | Exact API | Usable by an executor? |
-| --- | --- | --- |
-| Model-facing tools | `agent`, `agent_control`, `agent_patch` | No. Only the model calls them; an extension cannot invoke a tool and await its typed result. |
-| Parent hooks | `registerIceSubagentHook(owner: object, id: string, handler: IceHookHandler): () => void` | Observe and gate only. Configured hooks run on `subagent.beforeLaunch`, `subagent.beforeTool`, `subagent.afterTool`, `subagent.beforeAccept`, `subagent.started`, `subagent.checkpoint`, `subagent.attention`, `subagent.completed`, `subagent.failed`, `subagent.cancelled`, `subagent.timedOut`. Hooks cannot launch a child. |
-| SDK embedding | `createIceSubagents(options?): IceSubagentsSdk` with `attach(session)`, `overview(): IceSubagentOverview \| undefined`, `respondToApproval(approvalId, answer): boolean` | Read-only status (`IceSubagentOverviewChild`: `id`, `agent`, `name`, `state`, `running`, `turns`, `tokens`, `cost`, ...) and approval answers. No launch, await, or cancel. |
-| MCP bridge | `registerIceSubagentMcpAdapter(...)` | Supplies tools to children; not an execution API. |
+| Controller call | ICE behaviour |
+| --- | --- |
+| `start(task, { signal, onLaunched })` | The `agent` tool's launch path: task schema, context packet, preflight, launch approval, permission caps, depth limit. Runs the first turn without delivering it to the parent conversation. Returns the turn outcome, text, frozen model, worktree `patchState`, and the validated structured `payload`. |
+| `stop(id)` | Stops the child's turn. |
+| `preview(id, maxBytes)` | Read-only diff, changed paths and worktree root of an open patch. Never inspects or pins it, so `agent_patch` still gates integration. |
 
-There is no public, versioned ICE API that lets an extension launch a child,
-bind it to an external identity, await a typed result, or cancel it. A native
-executor therefore cannot be built on the current surface without calling
-internal modules (`subagents/v2/runtime.ts`), which this fork must not do.
+While a child's patch is open, another child of the same parent may **read**
+(never write) that worktree without an external-directory approval. This is how
+an independent reviewer reads the patched files.
 
-## Required ICE API before a native adapter
+## Adapter contract
 
-A native executor needs ICE to export, with a version number:
+- **Discover:** offers `executorId: "ice-subagents"`, roles `planner`,
+  `implementer`, `reviewer`, `revision`, isolation `worktree`, cancellation, no
+  reconciliation, priority 20, only when enabled and the controller exists.
+- **Accept:** acknowledges with `executionState: "starting"`, bound to the issue,
+  workflow run, lease epoch and a fresh execution ID. A refused launch completes
+  with `outcome: "failure"` and an `executionError`.
+- **Writer:** implementers and revisions run the `worker` agent in an ICE
+  worktree. Artifacts are `ice-subagent:<childId>` plus changed paths. Patches are
+  never applied by Workgraph.
+- **Review:** a separate `review` child receives the author's diff and read
+  access to the author's worktree. Its validated payload is the verdict.
+  Medium/high risk also needs a different reviewer model (`models.reviewer`).
+- **Planner:** a `plan` child; its validated payload is the plan.
+- **Schemas:** protocol output schemas are projected onto ICE's closed subset;
+  `enum` constraints become prompt hints and the coordinator re-validates the
+  payload against the full schema.
+- **Cancel:** aborts the turn, stops the child, acknowledges `run:cancelled`, and
+  never reports completion for the cancelled run.
+- **Recovery:** runs end with their session; status requests for unknown runs
+  answer `missing`.
+- **Provenance:** `harness: "ice"`, `profile` = ICE agent, `model`/`provider` =
+  the child's frozen model.
 
-1. `launch({ agent, task, isolation, correlation })` returning a child ID once
-   the run is durably accepted.
-2. Await or subscribe to a typed terminal outcome (`completed`, `failed`,
-   `cancelled`, `timed_out`) carrying the final text, patch reference, and
-   effective model provenance.
-3. `cancel(childId)` that resolves only after the run stops.
-4. Lookup by correlation for restart reconciliation.
-
-Until then, the coordinator runs only with the in-session compatibility
-executor or an explicitly enabled external executor.
-
-## Invariants for any future adapter
-
-- **Discover:** advertise `executorId`, adapter version, exact roles,
-  available capacity, isolation, cancellation and reconciliation.
-- **Accept:** only acknowledge execution once a real ICE-native run is bound
-  to issue ID, workflow-run ID, lease epoch and execution ID.
-- **Writer:** use ICE worktree isolation (`isolation: "worktree"`, applied only
-  through `agent_patch`) or an approved permission boundary. No permission
-  escalation through a subagent and no recursive delegation.
-- **Review:** use a separately launched reviewer with independent author
-  provenance; self-reported acceptance is not an independent verdict.
-- **Planner/verifier:** publish a schema-validated plan/evidence bundle;
-  enforce workflow class and risk policy in the workgraph authority.
-- **Cancel/repair:** acknowledge cancellation after the run stops or returns
-  an explicit terminal state. Never treat silence as completion.
-- **Recovery:** reconcile unknown, missing, active and terminal runs on
-  restart with no duplicated irreversible mutation.
-- **Observability:** bounded progress, artifacts, effective provider/model
-  provenance and typed supervisor decision requests; no private chain of
-  thought or secrets in the evidence payload.
-
-The adapter must not replace ICE's reasoning loop, mode/permission policy,
+The adapter never replaces ICE's reasoning loop, mode or permission policy,
 session store, model router or compactor.

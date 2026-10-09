@@ -80,6 +80,8 @@ export interface MockPi {
     options?: RecordedMessage["options"],
   ): void;
   appendEntry(customType: string, data?: unknown): void;
+  registerCommand(name: string, command: { description?: string; handler: (args: string, ctx: ExtensionContext) => Promise<void> }): void;
+  registerMessageRenderer(customType: string, renderer: unknown): void;
   /** The shared extension event bus (phase 2: the protocol transport). */
   events: MockEventBus;
 
@@ -87,6 +89,8 @@ export interface MockPi {
   execCalls: RecordedExec[];
   tools: Map<string, AnyToolDefinition>;
   handlers: Map<string, ((...args: unknown[]) => unknown)[]>;
+  commands: Map<string, { description?: string; handler: (args: string, ctx: ExtensionContext) => Promise<void> }>;
+  messageRenderers: Map<string, unknown>;
   /** Set a flag value as if it were passed on the CLI. */
   setFlag(name: string, value: boolean | string | undefined): void;
   /** Peak number of concurrently in-flight exec calls (serialization guard). */
@@ -185,6 +189,8 @@ export function makeMockPi(): MockPi {
   const execCalls: RecordedExec[] = [];
   const tools = new Map<string, AnyToolDefinition>();
   const handlers = new Map<string, ((...args: unknown[]) => unknown)[]>();
+  const commands: MockPi["commands"] = new Map();
+  const messageRenderers = new Map<string, unknown>();
   // Most legacy coordinator suites intentionally exercise opt-in dispatch.
   // Production default is false; the test harness explicitly opts in.
   const flagValues = new Map<string, boolean | string | undefined>([
@@ -229,6 +235,12 @@ export function makeMockPi(): MockPi {
     },
     appendEntry(customType, data) {
       entries.push({ customType, data });
+    },
+    registerCommand(name, command) {
+      commands.set(name, command);
+    },
+    registerMessageRenderer(customType, renderer) {
+      messageRenderers.set(customType, renderer);
     },
     events: {
       emit(channel, data) {
@@ -280,6 +292,8 @@ export function makeMockPi(): MockPi {
     execCalls,
     tools,
     handlers,
+    commands,
+    messageRenderers,
     setFlag(name, value) {
       if (value === undefined) flagValues.delete(name);
       else flagValues.set(name, value);
@@ -407,6 +421,10 @@ export interface MockEventContext {
   ctx: ExtensionContext;
   /** Every `ui.setStatus` call, in order. */
   statusCalls: RecordedStatus[];
+  /** Every `ui.setWidget` call, in order. */
+  widgetCalls: { key: string; content: string[] | undefined }[];
+  /** Every `ui.notify` call, in order. */
+  notifications: { message: string; type?: string }[];
   setIdle(idle: boolean): void;
   setPendingMessages(pending: boolean): void;
 }
@@ -416,6 +434,8 @@ export function makeEventContext(
   opts: EventContextOptions = {},
 ): MockEventContext {
   const statusCalls: RecordedStatus[] = [];
+  const widgetCalls: MockEventContext["widgetCalls"] = [];
+  const notifications: MockEventContext["notifications"] = [];
   let idle = opts.idle ?? true;
   let pending = opts.pendingMessages ?? false;
   const auth = opts.auth ?? { ok: true as const };
@@ -433,7 +453,12 @@ export function makeEventContext(
       setStatus(key: string, text: string | undefined) {
         statusCalls.push({ key, text });
       },
-      notify() {},
+      setWidget(key: string, content: string[] | undefined) {
+        widgetCalls.push({ key, content });
+      },
+      notify(message: string, type?: string) {
+        notifications.push({ message, ...(type ? { type } : {}) });
+      },
     },
     isIdle: () => idle,
     hasPendingMessages: () => pending,
@@ -448,6 +473,8 @@ export function makeEventContext(
   return {
     ctx,
     statusCalls,
+    widgetCalls,
+    notifications,
     setIdle(v: boolean) {
       idle = v;
     },

@@ -107,7 +107,35 @@ export interface WorkgraphConfig {
    * passes the version gate.
    */
   subagentsExecutor?: SubagentsExecutorConfig;
+  /**
+   * Opt-in: run executor roles as native ICE Subagents V2 children. Default
+   * UNDEFINED (disabled); enabled sessions offer only when ICE publishes its
+   * subagent controller.
+   */
+  iceSubagentsExecutor?: IceSubagentsExecutorConfig;
 }
+
+/** Executor roles the native ICE adapter can run, mapped to ICE agent definition names. */
+export type IceSubagentsRole = "planner" | "implementer" | "reviewer" | "revision";
+
+export interface IceSubagentsExecutorConfig {
+  enabled: true;
+  /** Agent definition per role; unset roles use {@link DEFAULT_ICE_SUBAGENT_AGENTS}. */
+  agents: Record<IceSubagentsRole, string>;
+  /**
+   * Optional model per role (an ICE model pattern such as `provider/id`).
+   * Medium/high-risk judgment requires the reviewer's model to differ from the author's.
+   */
+  models: Partial<Record<IceSubagentsRole, string>>;
+}
+
+/** Built-in ICE agents: writers run in isolated worktrees, the others read-only. */
+export const DEFAULT_ICE_SUBAGENT_AGENTS: Readonly<Record<IceSubagentsRole, string>> = {
+  planner: "plan",
+  implementer: "worker",
+  reviewer: "review",
+  revision: "worker",
+};
 
 export const DEFAULT_LEASE_TTL_MS = 300_000;
 export const DEFAULT_HEARTBEAT_MS = 60_000;
@@ -169,6 +197,11 @@ const FLAGS = [
     name: "ice-workgraph-subagents-executor",
     description:
       'Opt-in: register the experimental pi-subagents bridge — "true" or JSON with versionRange/routes (default disabled; env ICE_WORKGRAPH_SUBAGENTS_EXECUTOR)',
+  },
+  {
+    name: "ice-workgraph-ice-subagents",
+    description:
+      'Opt-in: run executor roles as native ICE subagents — "true" or JSON {agents, models} keyed by role (default disabled; env ICE_WORKGRAPH_ICE_SUBAGENTS)',
   },
   {
     name: "ice-workgraph-finalization",
@@ -475,5 +508,62 @@ export function resolveConfig(pi: ExtensionAPI): WorkgraphConfig {
       "ice-workgraph-subagents-executor",
       "ICE_WORKGRAPH_SUBAGENTS_EXECUTOR",
     ),
+    iceSubagentsExecutor: iceSubagentsValue(
+      pi,
+      "ice-workgraph-ice-subagents",
+      "ICE_WORKGRAPH_ICE_SUBAGENTS",
+    ),
   };
+}
+
+const AGENT_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+
+function iceSubagentsValue(
+  pi: ExtensionAPI,
+  flag: string,
+  envVar: string,
+): IceSubagentsExecutorConfig | undefined {
+  const raw = stringValue(pi, flag, envVar);
+  if (raw === undefined) return undefined;
+  const lowered = raw.toLowerCase();
+  if (["false", "0", "no", "off"].includes(lowered)) return undefined;
+  const agents = { ...DEFAULT_ICE_SUBAGENT_AGENTS };
+  const models: IceSubagentsExecutorConfig["models"] = {};
+  if (["true", "1", "yes", "on"].includes(lowered)) return { enabled: true, agents, models };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.error(`[ice-workgraph] ignoring unparseable ${flag}/${envVar} value (not JSON)`);
+    return undefined;
+  }
+  const record = (value: unknown): Record<string, unknown> | undefined =>
+    value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+  const root = record(parsed);
+  if (!root) return undefined;
+  const agentInput = root.agents === undefined ? {} : record(root.agents);
+  const modelInput = root.models === undefined ? {} : record(root.models);
+  if (!agentInput || !modelInput) {
+    console.error(`[ice-workgraph] ignoring ${flag}/${envVar}: agents and models must be objects`);
+    return undefined;
+  }
+  for (const role of Object.keys(agents) as IceSubagentsRole[]) {
+    const agent = agentInput[role];
+    if (agent !== undefined) {
+      if (typeof agent !== "string" || !AGENT_NAME.test(agent)) {
+        console.error(`[ice-workgraph] ignoring ${flag}/${envVar}: invalid agent name for ${role}`);
+        return undefined;
+      }
+      agents[role] = agent;
+    }
+    const model = modelInput[role];
+    if (model !== undefined) {
+      if (typeof model !== "string" || model.trim() === "" || model.length > 256) {
+        console.error(`[ice-workgraph] ignoring ${flag}/${envVar}: invalid model for ${role}`);
+        return undefined;
+      }
+      models[role] = model.trim();
+    }
+  }
+  return { enabled: true, agents, models };
 }

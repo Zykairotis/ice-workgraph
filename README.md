@@ -56,7 +56,11 @@ sessions, harnesses, and machines. Everything else is delegated:
 
 ## Requirements
 
-- ICE (@zykairotis/ice-coding-agent) 0.83.x
+- ICE (@zykairotis/ice-coding-agent) 0.83.x. Under ICE plan/build modes the
+  tools appear only on an ICE build that honours per-tool `access` classes, and
+  the native subagent executor needs ICE's subagent controller (both newer than
+  0.83.0). Older hosts load the extension but keep its tools inactive in those
+  modes and never offer the native executor.
 - [beads](https://github.com/gastownhall/beads) (`bd`) ≥ 1.1.2 on your `PATH`.
   `bd` sends anonymous usage metrics by default; run `bd metrics off` to opt
   out. ICE Workgraph itself sends no telemetry.
@@ -159,6 +163,7 @@ Resolution order per value: CLI flag > environment variable > default.
 | `--ice-workgraph-compat-legacy-issues`       | `ICE_WORKGRAPH_COMPAT_LEGACY_ISSUES`       | `false`                         | Opt-in: auto-dispatch issues without lifecycle metadata (warned once)                                                                   |
 | `--ice-workgraph-policy`                     | `ICE_WORKGRAPH_POLICY`                     | low advisory, med/high blocking | Per-risk-tier judgment-gate policy overrides (JSON)                                                                                     |
 | `--ice-workgraph-subagents-executor`         | `ICE_WORKGRAPH_SUBAGENTS_EXECUTOR`         | disabled                        | Opt-in: the experimental pi-subagents bridge                                                                                            |
+| `--ice-workgraph-ice-subagents`             | `ICE_WORKGRAPH_ICE_SUBAGENTS`             | disabled                        | Opt-in: run executor roles as native ICE subagents (`true` or JSON `{agents, models}` per role) |
 | `--ice-workgraph-worker-id`                  | `ICE_WORKGRAPH_WORKER_ID`                  | `{user}@{host}/{short-session}` | Worker identity used for claims, audit records, and fencing checks                                                                      |
 | `--ice-workgraph-dispatch`                   | —                                      | `false`                          | Kill switch: `false` keeps tools + context injection, no autonomy (the flag name predates the coordinator; it disables the coordinator) |
 
@@ -377,6 +382,49 @@ Read the trail back with `bd comments <id> --json` and grep for the
 Audit writes never block lease operations: the protocol stays correct
 without the trail, and a broken audit surface must not take claiming down
 with it.
+
+## ICE integration
+
+ICE Workgraph runs inside ICE's own loop, modes and subagents; it adds no planner,
+session store or compactor of its own.
+
+**Modes and trust.** Every tool declares an ICE access class. `ice_workgraph_ready`
+and `ice_workgraph_status` are `read` and work in plan and build mode; the other
+seven are `write` and exist only in a trusted ICE build session. Each write also
+re-checks the trusted build state itself, and the coordinator and expiry sweep
+never run outside a trusted build.
+
+**TUI.** A widget above the editor lists the held lease and its countdown, the
+next approved issues, and issues awaiting `ice_workgraph_approve`. It refreshes on
+session start, after any Workgraph tool, on settle and after compaction, reusing
+the 10 s graph cache. `/workgraph` (`status`, `ready`, `refresh`) shows the same
+view on demand. Dispatch wake messages render as a one-line summary; expand them
+for the full work prompt. Print, JSON and RPC sessions never touch the UI.
+
+**Compaction.** ICE owns compaction. The `<ice-workgraph>` context section is
+re-injected before every turn, so a compacted session regains its issue context
+on the next turn.
+
+**Native subagent executor.** With `--ice-workgraph-ice-subagents true` and the
+coordinator enabled (`--ice-workgraph-dispatch true`), executor roles run as ICE
+Subagents V2 children through the same preflight, approvals, permission caps
+and depth limit as the `agent` tool:
+
+| Role | Default ICE agent | Where it runs |
+| --- | --- | --- |
+| `planner` | `plan` | read-only, parent checkout |
+| `implementer`, `revision` | `worker` | its own ICE worktree |
+| `reviewer` | `review` | read-only; reads the author's open-patch worktree |
+
+Reviewers are separate children, so author and reviewer provenance differ by
+execution. Medium/high-risk judgment also requires a different model; set one per
+role, for example
+`--ice-workgraph-ice-subagents '{"models":{"reviewer":"provider/other-model"}}'`.
+Planner and reviewer results are validated ICE structured payloads, checked again
+against the Workgraph schema. An accepted issue closes while its code stays an
+**open ICE patch**: integrate it with `agent_patch` (inspect, then apply). Workgraph
+never applies patches. Runs end with their session; a restarted session reports
+them missing and the coordinator recovers the issue.
 
 ## Experimental: Control-Plane Protocol v1
 
