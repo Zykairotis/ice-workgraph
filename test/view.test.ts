@@ -83,6 +83,19 @@ describe("widget rendering", () => {
     ]);
   });
 
+  it("lists accepted work whose ICE patch still awaits agent_patch", () => {
+    const patches = [
+      { issueId: "wg-1", childId: "ag_1", childName: "falcon" },
+      { issueId: "wg-2", childId: "ag_2" },
+    ];
+    expect(renderWorkgraphWidget(state(), [], NOW, patches)).toEqual([
+      "ICE Workgraph · 0 held · 0 ready · 0 awaiting approval · 2 patches to apply",
+      "⇢ wg-1 · patch falcon awaits agent_patch (inspect, then apply)",
+      "⇢ wg-2 · patch ag_2 awaits agent_patch (inspect, then apply)",
+    ]);
+    expect(renderWorkgraphReport(state(), [], NOW, false, patches.slice(0, 1))).toContain("1 patch to apply");
+  });
+
   it("reports ready work and explains an uninitialized workspace", () => {
     expect(renderWorkgraphReport(state({ initialized: false }), [], NOW, false)).toMatch(/bd init/);
     expect(renderWorkgraphReport(state(), [], NOW, true)).toMatch(/no approved issues/);
@@ -145,6 +158,28 @@ describe("registered view", () => {
 
     await mock.emit("session_shutdown", { type: "session_shutdown" }, event.ctx);
     expect(event.widgetCalls.at(-1)).toEqual({ key: WIDGET_KEY, content: undefined });
+  });
+
+  it("reads pending patches from the host's ICE subagent controller", async () => {
+    const { graph, mock } = harness();
+    Object.defineProperty(mock.events, Symbol.for("ice.subagents.controller.v1"), {
+      value: {
+        version: 1,
+        start: async () => ({}),
+        stop: async () => {},
+        preview: () => undefined,
+        openPatches: () => [
+          { id: "ag_1", agent: "worker", description: "implementer wg-9: Fix the thing" },
+          { id: "ag_2", agent: "general", description: "user-launched task" },
+        ],
+      },
+      configurable: true,
+    });
+    const event = makeEventContext(graph.dir);
+    await mock.emit("session_start", { type: "session_start" }, event.ctx);
+    const content = event.widgetCalls.at(-1)?.content ?? [];
+    expect(content[0]).toContain("1 patch to apply");
+    expect(content).toContain("⇢ wg-9 · patch ag_1 awaits agent_patch (inspect, then apply)");
   });
 
   it("never touches the UI without one", async () => {

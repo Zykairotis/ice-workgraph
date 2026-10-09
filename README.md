@@ -395,7 +395,8 @@ re-checks the trusted build state itself, and the coordinator and expiry sweep
 never run outside a trusted build.
 
 **TUI.** A widget above the editor lists the held lease and its countdown, the
-next approved issues, and issues awaiting `ice_workgraph_approve`. It refreshes on
+next approved issues, issues awaiting `ice_workgraph_approve`, and accepted issues
+whose ICE patch still awaits `agent_patch`. It refreshes on
 session start, after any Workgraph tool, on settle and after compaction, reusing
 the 10 s graph cache. `/workgraph` (`status`, `ready`, `refresh`) shows the same
 view on demand. Dispatch wake messages render as a one-line summary; expand them
@@ -419,7 +420,8 @@ and depth limit as the `agent` tool:
 Reviewers are separate children, so author and reviewer provenance differ by
 execution. Medium/high-risk judgment also requires a different model; set one per
 role, for example
-`--ice-workgraph-ice-subagents '{"models":{"reviewer":"provider/other-model"}}'`.
+`--ice-workgraph-ice-subagents '{"models":{"reviewer":"omni/cx/gpt-5.6-sol"}}'`
+(a `provider/id` pair, where the id may itself contain a slash).
 Planner and reviewer results are validated ICE structured payloads, checked again
 against the Workgraph schema. An accepted issue closes while its code stays an
 **open ICE patch**: integrate it with `agent_patch` (inspect, then apply). Workgraph

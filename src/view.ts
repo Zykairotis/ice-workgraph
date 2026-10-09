@@ -10,6 +10,7 @@
  */
 import type { ExtensionAPI, ExtensionContext } from "@zykairotis/ice-coding-agent";
 import { Box, Text } from "@zykairotis/ice-tui";
+import { findIceSubagentController, type PendingIssuePatch, pendingIssuePatches } from "./adapters/ice-subagents.ts";
 import { ICE_WORKGRAPH_NAME, ICE_WORKGRAPH_TOOL_PREFIX } from "./branding.ts";
 import { cachedGraphState, type GraphState, invalidateGraphState } from "./context.ts";
 import { DISPATCH_MESSAGE_TYPE } from "./dispatch.ts";
@@ -39,12 +40,18 @@ export function renderWorkgraphWidget(
   state: GraphState,
   held: HeldLease[],
   nowMs: number,
+  patches: readonly PendingIssuePatch[] = [],
 ): string[] | undefined {
   if (!state.initialized) return undefined;
-  if (held.length === 0 && state.approvedCount === 0 && state.awaitingApprovalCount === 0) return undefined;
+  if (held.length === 0 && state.approvedCount === 0 && state.awaitingApprovalCount === 0 && patches.length === 0)
+    return undefined;
   const lines = [
-    `${ICE_WORKGRAPH_NAME} · ${held.length} held · ${state.approvedCount} ready · ${state.awaitingApprovalCount} awaiting approval`,
+    `${ICE_WORKGRAPH_NAME} · ${held.length} held · ${state.approvedCount} ready · ${state.awaitingApprovalCount} awaiting approval${patches.length ? ` · ${patches.length} patch${patches.length === 1 ? "" : "es"} to apply` : ""}`,
   ];
+  for (const patch of patches.slice(0, WIDGET_LIST_LIMIT)) {
+    lines.push(`⇢ ${patch.issueId} · patch ${patch.childName ?? patch.childId} awaits agent_patch (inspect, then apply)`);
+  }
+  if (patches.length > WIDGET_LIST_LIMIT) lines.push(`  …${patches.length - WIDGET_LIST_LIMIT} more patches to apply`);
   for (const lease of held) {
     lines.push(`▸ ${lease.issueId} · lease ${formatCountdown(Date.parse(lease.expiresAt) - nowMs)} · epoch ${lease.epoch}`);
   }
@@ -57,7 +64,13 @@ export function renderWorkgraphWidget(
 }
 
 /** Plain-text report for `/workgraph`; always returns something to show. */
-export function renderWorkgraphReport(state: GraphState, held: HeldLease[], nowMs: number, ready: boolean): string {
+export function renderWorkgraphReport(
+  state: GraphState,
+  held: HeldLease[],
+  nowMs: number,
+  ready: boolean,
+  patches: readonly PendingIssuePatch[] = [],
+): string {
   if (!state.initialized) return `${ICE_WORKGRAPH_NAME}: no beads workspace here (run \`bd init\`), or bd is not installed.`;
   if (ready) {
     if (state.approvedCount === 0) return `${ICE_WORKGRAPH_NAME}: no approved issues ready to dispatch.`;
@@ -67,7 +80,7 @@ export function renderWorkgraphReport(state: GraphState, held: HeldLease[], nowM
     ].join("\n");
   }
   return (
-    renderWorkgraphWidget(state, held, nowMs)?.join("\n") ??
+    renderWorkgraphWidget(state, held, nowMs, patches)?.join("\n") ??
     `${ICE_WORKGRAPH_NAME}: nothing held, ready, or awaiting approval.`
   );
 }
@@ -89,11 +102,18 @@ export function registerWorkgraphView(pi: ExtensionAPI, opts: WorkgraphViewOptio
   const now = opts.now ?? Date.now;
   const cacheOpts = { now, ...(opts.ttlMs !== undefined ? { ttlMs: opts.ttlMs } : {}) };
   let refreshing: Promise<void> | undefined;
+  const patches = (): PendingIssuePatch[] => {
+    try {
+      return pendingIssuePatches(findIceSubagentController(pi.events));
+    } catch {
+      return [];
+    }
+  };
 
   async function refresh(ctx: ExtensionContext): Promise<void> {
     if (!ctx.hasUI) return;
     const state = await cachedGraphState(ctx.cwd, cacheOpts);
-    ctx.ui.setWidget(WIDGET_KEY, renderWorkgraphWidget(state, heldLeases(ctx.cwd), now()));
+    ctx.ui.setWidget(WIDGET_KEY, renderWorkgraphWidget(state, heldLeases(ctx.cwd), now(), patches()));
   }
 
   // One refresh at a time; overlapping triggers coalesce into the running one.
@@ -133,8 +153,10 @@ export function registerWorkgraphView(pi: ExtensionAPI, opts: WorkgraphViewOptio
       invalidateGraphState(ctx.cwd);
       const state = await cachedGraphState(ctx.cwd, cacheOpts);
       if (!ctx.hasUI) return;
-      ctx.ui.setWidget(WIDGET_KEY, renderWorkgraphWidget(state, heldLeases(ctx.cwd), now()));
-      if (sub !== "refresh") ctx.ui.notify(renderWorkgraphReport(state, heldLeases(ctx.cwd), now(), sub === "ready"), "info");
+      const pending = patches();
+      ctx.ui.setWidget(WIDGET_KEY, renderWorkgraphWidget(state, heldLeases(ctx.cwd), now(), pending));
+      if (sub !== "refresh")
+        ctx.ui.notify(renderWorkgraphReport(state, heldLeases(ctx.cwd), now(), sub === "ready", pending), "info");
     },
   });
 

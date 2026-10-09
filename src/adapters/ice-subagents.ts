@@ -74,6 +74,8 @@ export interface IceSubagentControllerV1 {
     payload?: Readonly<Record<string, unknown>>;
   }>;
   stop(id: string): Promise<void>;
+  /** Optional on early v1 hosts: children whose worktree patch awaits `agent_patch`. */
+  openPatches?(): ReadonlyArray<{ id: string; name?: string; agent: string; description: string }>;
   preview(
     id: string,
     maxBytes?: number,
@@ -170,6 +172,21 @@ export interface ReviewedPatch {
   root: string;
   changedPaths: readonly string[];
   diff: string;
+}
+
+/** An open ICE patch produced for a workgraph issue, awaiting `agent_patch`. */
+export interface PendingIssuePatch {
+  issueId: string;
+  childId: string;
+  childName?: string;
+}
+
+/** Open patches whose child this adapter launched (description `implementer|revision <issue>: ...`). */
+export function pendingIssuePatches(controller: IceSubagentControllerV1 | undefined): PendingIssuePatch[] {
+  return (controller?.openPatches?.() ?? []).flatMap((patch) => {
+    const match = /^(?:implementer|revision) (\S+): /.exec(patch.description);
+    return match ? [{ issueId: match[1]!, childId: patch.id, ...(patch.name ? { childName: patch.name } : {}) }] : [];
+  });
 }
 
 /** The child's task prompt. Workgraph tools are not available to children; the coordinator owns the issue. */
