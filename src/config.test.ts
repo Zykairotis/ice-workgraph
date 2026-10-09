@@ -6,7 +6,7 @@ describe("subagents routing config", () => {
   it("parses non-empty named-profile routes and drops malformed entries", () => {
     const mock = makeMockPi();
     mock.setFlag(
-      "workgraph-subagents-executor",
+      "ice-workgraph-subagents-executor",
       JSON.stringify({
         enabled: true,
         versionRange: "0.34",

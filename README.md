@@ -1,6 +1,6 @@
-# pi-workgraph
+# ICE Workgraph
 
-A [Pi](https://github.com/earendil-works/pi) extension that turns the
+An [ICE](https://github.com/Zykairotis/ice) extension that turns the
 [beads](https://github.com/gastownhall/beads) (`bd`) work graph into a
 durable, harness-neutral work **control plane**: typed tools for agents,
 expiring leases with fencing, an approval-gated lifecycle with an
@@ -10,7 +10,7 @@ pluggable executor adapters over versioned protocol envelopes.
 bd gives agents a dependency-aware work graph with race-safe atomic claims,
 but a claim never expires: a session that crashes or gets SIGKILL'd mid-task
 leaves its issue assigned forever, invisible to every other worker.
-pi-workgraph adds a TTL + fencing lease layer on top of bd's primitives, a
+ICE Workgraph adds a TTL + fencing lease layer on top of bd's primitives, a
 durable, per-issue lifecycle (one-shot, reviewed, or planned) stored in
 namespaced issue metadata, a coordinator that discovers executors and
 supervises runs end to end, and per-turn context injection so the graph
@@ -18,13 +18,13 @@ survives conversation compaction.
 
 ## The three roles
 
-pi-workgraph owns only the state and invariants that must survive agents,
+ICE Workgraph owns only the state and invariants that must survive agents,
 sessions, harnesses, and machines. Everything else is delegated:
 
 ```text
 ┌───────────────────────────┐    workgraph:v1:* envelopes    ┌───────────────────────────┐
 │ WORK AUTHORITY            │ ─────────────────────────────► │ EXECUTION                 │
-│ pi-workgraph + beads      │   discover / offer / request   │ executor adapters:        │
+│ ICE Workgraph + beads      │   discover / offer / request   │ executor adapters:        │
 │ issues & dependencies,    │ ◄───────────────────────────── │ · in-session (compat,     │
 │ atomic claims, expiring   │    accept / complete / status  │   default)                │
 │ leases + fencing, the     │                                │ · pi-subagents bridge     │
@@ -52,20 +52,20 @@ sessions, harnesses, and machines. Everything else is delegated:
   the [pi-subagents bridge](#6-optional-executor-the-pi-subagents-bridge)
   ships disabled.
 - **Communication** — observers of the audit trail and
-  `workgraph:v1:activity` events, and remote transports via the
-  [Agent IRC transport adapter contract](docs/agent-irc-transport.md)
-  (documented, deliberately not implemented here).
+  `workgraph:v1:activity` events. Remote transport is not implemented.
 
 ## Requirements
 
-- [Pi](https://github.com/earendil-works/pi) ≥ 0.83
-- [beads](https://github.com/gastownhall/beads) (`bd`) ≥ 1.1.2 on your `PATH`
-- Node ≥ 22 (Pi loads the TypeScript source directly; no build step)
+- ICE (@zykairotis/ice-coding-agent) 0.83.x
+- [beads](https://github.com/gastownhall/beads) (`bd`) ≥ 1.1.2 on your `PATH`.
+  `bd` sends anonymous usage metrics by default; run `bd metrics off` to opt
+  out. ICE Workgraph itself sends no telemetry.
+- Node ≥ 22.19 (ICE loads the TypeScript source directly; no build step)
 
 ## Install
 
 ```bash
-pi install npm:pi-workgraph
+ice install /path/to/this/local/fork
 ```
 
 ## Quickstart
@@ -77,22 +77,23 @@ bd init
 # 2. Seed one issue
 bd create "implement retry backoff"
 
-# 3. Start Pi
-pi
+# 3. Start ICE
+ice
 ```
 
-A freshly created issue is **not yet approved** — the coordinator only
-dispatches approved work. Approve it (ask the agent, or do it yourself in a
-Pi session):
+A freshly created issue is **not yet approved**. Mutating tools require a
+trusted ICE build session. The coordinator is disabled by default and only
+dispatches approved work when explicitly enabled. Ask the agent to approve an
+issue in the trusted build session:
 
 ```text
 > approve bdx-001 with acceptance criteria "retries back off exponentially,
   covered by tests"
 ```
 
-The agent calls `workgraph_approve`, which records the acceptance criteria,
+The agent calls `ice_workgraph_approve`, which records the acceptance criteria,
 stamps an independent workflow class and risk tier, and moves the issue to
-phase `ready`. On the next idle tick the coordinator discovers an executor
+phase `ready`. When enabled, on the next idle tick the coordinator discovers an executor
 (the in-session compatibility executor, unless you disabled it), claims the
 issue under a workflow-run lease, and delegates the selected workflow.
 `reviewed` is the default: an independent reviewer checks the acceptance
@@ -116,11 +117,11 @@ that exhausts its revision bound or repeats the same blocking verdict is
 promoted once to `planned`; failure to converge after planning escalates to
 blocked as before.
 
-Prefer tools without autonomy? Disable the coordinator and keep everything
-else:
+To enable the coordinator, opt in from a trusted ICE build session.
+Without this flag ICE Workgraph remains in tools-only mode:
 
 ```bash
-pi --workgraph-dispatch=false
+ice --ice-mode build --ice-workgraph-dispatch
 ```
 
 ## Tools
@@ -131,15 +132,15 @@ writes are how leases get corrupted.
 
 | Tool                  | What it does                                                                                          |
 | --------------------- | ----------------------------------------------------------------------------------------------------- |
-| `workgraph_ready`     | List approved claimable issues (dependency-unblocked, unassigned); `legacy: true` lists unapproved    |
-| `workgraph_claim`     | Atomically claim an issue by id, or the next ready one; stamps a lease                                |
-| `workgraph_release`   | Voluntarily hand a claimed issue back to the pool (fenced; clears assignee, reopens)                  |
-| `workgraph_close`     | Close an issue (fenced; lifecycle-v1 work must be phase `accepted` — the judgment gate's output)      |
-| `workgraph_split`     | Split an issue into child issues; the parent is blocked until every child closes                      |
-| `workgraph_heartbeat` | Renew the leases this worker holds (verifies the fencing epoch, pushes `lease_expires_at` forward)    |
-| `workgraph_approve`   | Approve a draft/legacy/escalated issue: acceptance criteria, workflow class, risk tier, phase `ready` |
-| `workgraph_override`  | Explicit human override: force-close or force-release, bypassing guards — always audited              |
-| `workgraph_status`    | One issue's full control-plane state: phase, lease, attempt, verdict, acceptance criteria             |
+| `ice_workgraph_ready`     | List approved claimable issues (dependency-unblocked, unassigned); `legacy: true` lists unapproved    |
+| `ice_workgraph_claim`     | Atomically claim an issue by id, or the next ready one; stamps a lease                                |
+| `ice_workgraph_release`   | Voluntarily hand a claimed issue back to the pool (fenced; clears assignee, reopens)                  |
+| `ice_workgraph_close`     | Close an issue (fenced; lifecycle-v1 work must be phase `accepted` — the judgment gate's output)      |
+| `ice_workgraph_split`     | Split an issue into child issues; the parent is blocked until every child closes                      |
+| `ice_workgraph_heartbeat` | Renew the leases this worker holds (verifies the fencing epoch, pushes `lease_expires_at` forward)    |
+| `ice_workgraph_approve`   | Approve a draft/legacy/escalated issue: acceptance criteria, workflow class, risk tier, phase `ready` |
+| `ice_workgraph_override`  | Explicit human override: force-close or force-release, bypassing guards — always audited              |
+| `ice_workgraph_status`    | One issue's full control-plane state: phase, lease, attempt, verdict, acceptance criteria             |
 
 ## Configuration
 
@@ -147,24 +148,24 @@ Resolution order per value: CLI flag > environment variable > default.
 
 | Flag                                     | Environment variable                   | Default                         | Purpose                                                                                                                                 |
 | ---------------------------------------- | -------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `--workgraph-lease-ttl-ms`               | `WORKGRAPH_LEASE_TTL_MS`               | `300000` (5 min)                | Lease time-to-live; expired leases are reclaimable                                                                                      |
-| `--workgraph-heartbeat-ms`               | `WORKGRAPH_HEARTBEAT_MS`               | `60000` (60 s)                  | How often held leases are renewed                                                                                                       |
-| `--workgraph-poll-ms`                    | `WORKGRAPH_POLL_MS`                    | `30000` (30 s)                  | Coordinator poll interval (floored at 5 s in production wiring)                                                                         |
-| `--workgraph-sweep-interval-ms`          | `WORKGRAPH_SWEEP_INTERVAL_MS`          | the poll interval               | Expiry-sweep cadence (reclaims expired leases back to ready)                                                                            |
-| `--workgraph-discovery-timeout-ms`       | `WORKGRAPH_DISCOVERY_TIMEOUT_MS`       | `2000` (2 s)                    | Executor-discovery collection window                                                                                                    |
-| `--workgraph-accept-timeout-ms`          | `WORKGRAPH_ACCEPT_TIMEOUT_MS`          | `10000` (10 s)                  | Run-request accept/reject deadline                                                                                                      |
-| `--workgraph-compat-in-session-executor` | `WORKGRAPH_COMPAT_IN_SESSION_EXECUTOR` | `true`                          | Register the in-session compatibility executor                                                                                          |
-| `--workgraph-executor-id`                | `WORKGRAPH_EXECUTOR_ID`                | —                               | Pin executor selection to one executorId (errors when it's absent)                                                                      |
-| `--workgraph-compat-legacy-issues`       | `WORKGRAPH_COMPAT_LEGACY_ISSUES`       | `false`                         | Opt-in: auto-dispatch issues without lifecycle metadata (warned once)                                                                   |
-| `--workgraph-policy`                     | `WORKGRAPH_POLICY`                     | low advisory, med/high blocking | Per-risk-tier judgment-gate policy overrides (JSON)                                                                                     |
-| `--workgraph-subagents-executor`         | `WORKGRAPH_SUBAGENTS_EXECUTOR`         | disabled                        | Opt-in: the experimental pi-subagents bridge                                                                                            |
-| `--workgraph-worker-id`                  | `WORKGRAPH_WORKER_ID`                  | `{user}@{host}/{short-session}` | Worker identity used for claims, audit records, and fencing checks                                                                      |
-| `--workgraph-dispatch`                   | —                                      | `true`                          | Kill switch: `false` keeps tools + context injection, no autonomy (the flag name predates the coordinator; it disables the coordinator) |
+| `--ice-workgraph-lease-ttl-ms`               | `ICE_WORKGRAPH_LEASE_TTL_MS`               | `300000` (5 min)                | Lease time-to-live; expired leases are reclaimable                                                                                      |
+| `--ice-workgraph-heartbeat-ms`               | `ICE_WORKGRAPH_HEARTBEAT_MS`               | `60000` (60 s)                  | How often held leases are renewed                                                                                                       |
+| `--ice-workgraph-poll-ms`                    | `ICE_WORKGRAPH_POLL_MS`                    | `30000` (30 s)                  | Coordinator poll interval (floored at 5 s in production wiring)                                                                         |
+| `--ice-workgraph-sweep-interval-ms`          | `ICE_WORKGRAPH_SWEEP_INTERVAL_MS`          | the poll interval               | Expiry-sweep cadence (reclaims expired leases back to ready)                                                                            |
+| `--ice-workgraph-discovery-timeout-ms`       | `ICE_WORKGRAPH_DISCOVERY_TIMEOUT_MS`       | `2000` (2 s)                    | Executor-discovery collection window                                                                                                    |
+| `--ice-workgraph-accept-timeout-ms`          | `ICE_WORKGRAPH_ACCEPT_TIMEOUT_MS`          | `10000` (10 s)                  | Run-request accept/reject deadline                                                                                                      |
+| `--ice-workgraph-compat-in-session-executor` | `ICE_WORKGRAPH_COMPAT_IN_SESSION_EXECUTOR` | `true`                          | Register the in-session compatibility executor                                                                                          |
+| `--ice-workgraph-executor-id`                | `ICE_WORKGRAPH_EXECUTOR_ID`                | —                               | Pin executor selection to one executorId (errors when it's absent)                                                                      |
+| `--ice-workgraph-compat-legacy-issues`       | `ICE_WORKGRAPH_COMPAT_LEGACY_ISSUES`       | `false`                         | Opt-in: auto-dispatch issues without lifecycle metadata (warned once)                                                                   |
+| `--ice-workgraph-policy`                     | `ICE_WORKGRAPH_POLICY`                     | low advisory, med/high blocking | Per-risk-tier judgment-gate policy overrides (JSON)                                                                                     |
+| `--ice-workgraph-subagents-executor`         | `ICE_WORKGRAPH_SUBAGENTS_EXECUTOR`         | disabled                        | Opt-in: the experimental pi-subagents bridge                                                                                            |
+| `--ice-workgraph-worker-id`                  | `ICE_WORKGRAPH_WORKER_ID`                  | `{user}@{host}/{short-session}` | Worker identity used for claims, audit records, and fencing checks                                                                      |
+| `--ice-workgraph-dispatch`                   | —                                      | `false`                          | Kill switch: `false` keeps tools + context injection, no autonomy (the flag name predates the coordinator; it disables the coordinator) |
 
 ## How it works
 
 - **Coordinator** — the protocol-based dispatch loop, using a scheduling
-  shell built from a poll timer plus Pi's `agent_settled` idle edge and one
+  shell built from a poll timer plus ICE's `agent_settled` idle edge and one
   reentrancy-guarded tick). Each tick: fetch the ready pool (readiness is
   judged by array length, never exit codes), filter to approved lifecycle
   work, **discover executors first** (no executor → no claim), claim by id
@@ -175,16 +176,15 @@ Resolution order per value: CLI flag > environment variable > default.
   policy-approved close. On restart, persisted runs are reconciled —
   re-adopted, completed, or abandoned to the reclaim path.
 - **Context injection** — every turn, `before_agent_start` appends a fenced
-  `<workgraph>` section to the system prompt: current claim with lease
+  `<ice-workgraph>` section to the system prompt: current claim with lease
   countdown, ready count (top 5 rendered, the rest folded into the count,
   ≤ 30 lines total), and the collision-free claiming rules. Per-turn
   re-injection is the compaction-survival workhorse: even when a summary
   drops graph state, the next turn re-adds it fresh. Graph state is cached
   for 10 s per workspace.
-- **Compaction takeover** — when Pi compacts the conversation with work in
-  flight, pi-workgraph runs the compaction itself so the summary preserves
-  the in-flight issue id and title. With nothing claimed — and on every
-  failure path — it falls back to Pi's default compaction.
+- **Compaction** — ICE remains the compaction authority. Bounded work-graph
+  context is re-injected on the next turn; the extension does not invoke
+  an independent model compactor.
 - **Status bar** — current claim, lifecycle phase, executor, and lease
   countdown in the footer, TUI only; headless sessions never touch the UI.
 - **Audit trail** — every lease transition is recorded as an issue comment
@@ -203,8 +203,8 @@ exactly what the race suites exercise.
 
 This section is the interop contract. It is versioned independently of the
 package: protocol changes bump the `Convention-Version` line above, not just
-the npm semver. A third-party tool (any harness, not just Pi) can respect or
-detect pi-workgraph leases by implementing what follows. Every stated
+the npm semver. A third-party tool (any harness, not just ICE) can respect or
+detect ICE Workgraph convention-v1 leases by implementing what follows. Every stated
 invariant is tied to a test in this repository via an HTML comment in this
 document's source.
 
@@ -386,7 +386,7 @@ with it.
 > as of 0.2.0 — `src/protocol.ts` implements these tables name-for-name —
 > but until 1.0 it may still change in any release.
 
-pi-workgraph is a durable, harness-neutral work **control plane**: it owns
+ICE Workgraph is a durable, harness-neutral work **control plane**: it owns
 only the state and invariants that must survive agents, sessions,
 harnesses, and machines — work, dependencies, atomic claims, expiring
 leases, fencing, the lifecycle from approved work through implementation,
@@ -460,7 +460,7 @@ this process holds its tracked lease.
 
 Versioned execution envelopes (`protocolVersion: 1`; every message includes
 `messageId`, `occurredAt`, and the relevant correlation identifiers) travel
-over these Pi event-bus channels in the first transport:
+over these ICE event-bus channels in the first transport:
 
 | Channel                           | Direction        | Purpose                                                                         |
 | --------------------------------- | ---------------- | ------------------------------------------------------------------------------- |
@@ -483,17 +483,21 @@ Dispatch must discover an eligible executor **before** claiming work: no
 executor means no claim, and a missing or incompatible executor leaves the
 issue ready.
 
-Consume the schemas without the extension via the `pi-workgraph/protocol`
+Consume the schemas without the extension via the `@zykairotis/ice-workgraph/protocol`
 subpath export — see [Protocol-only usage](#protocol-only-usage).
+The published package retains TypeScript source and is designed for ICE's
+extension/TypeScript loader. Node's built-in type stripper does **not** load
+`.ts` files inside `node_modules` directly; an external Node-only consumer
+must use a compatible TypeScript loader or bundle/compile this export first.
 
 ### 4. Legacy compatibility
 
 Issues without `workgraph_lifecycle_version` are legacy issues. They remain
-readable. The first `workgraph_approve` (or compat-mode claim) initializes
+readable. The first `ice_workgraph_approve` (or compat-mode claim) initializes
 lifecycle metadata in one non-destructive write that preserves every
 pre-existing key.
 Automatic dispatch of legacy issues requires the **explicit opt-in
-compatibility setting** `workgraph-compat-legacy-issues` — it is never an
+compatibility setting** `ice-workgraph-compat-legacy-issues` — it is never an
 implicit default — and logs a once-per-session warning naming the setting
 and its effect. A legacy issue carrying a live lease is respected and never
 claimed, under either setting.
@@ -563,10 +567,10 @@ medium/high risk).
 The bridge ships **disabled**. Opt in explicitly:
 
 ```bash
-# flag (or env WORKGRAPH_SUBAGENTS_EXECUTOR)
---workgraph-subagents-executor=true
+# flag (or env ICE_WORKGRAPH_SUBAGENTS_EXECUTOR)
+--ice-workgraph-subagents-executor=true
 # or pin an accepted upstream major.minor range (optional strict gate):
---workgraph-subagents-executor='{"enabled":true,"versionRange":"0.34"}'
+--ice-workgraph-subagents-executor='{"enabled":true,"versionRange":"0.34"}'
 ```
 
 When configured and version-gated, it answers discovery as
@@ -617,7 +621,7 @@ The bridge uses named upstream profiles and can route them by workflow class
 and role without hard-coding model IDs into the control plane:
 
 ```bash
---workgraph-subagents-executor='{
+--ice-workgraph-subagents-executor='{
   "enabled": true,
   "routes": {
     "oneshot": { "implementer": "economy-worker" },
@@ -663,7 +667,7 @@ transitions. Observers own their transport, filtering, and presentation.
 
 **Remote transports**: the protocol can cross machines through a conforming
 transport adapter — see the
-[Agent IRC transport adapter contract](docs/agent-irc-transport.md)
+proposed remote transport contract (not implemented)
 (documented, deliberately not implemented here).
 
 ## Development
@@ -677,7 +681,7 @@ npm test            # full suite, serial (vitest run --no-file-parallelism)
 The cross-process suites (`test/race.test.ts`, `test/fencing.test.ts`,
 `test/reclaim.test.ts`) spawn real worker child processes on the TypeScript
 entrypoint via Node's native type stripping — running the test suite needs
-**Node ≥ 22.18** (consumers of the package don't: Pi's loader transpiles the
+**Node ≥ 22.18** (consumers of the package don't: ICE's extension loader transpiles the
 source itself). `bd` must be on your `PATH`. Timers are compressed (2 s
 TTLs), so the whole suite runs in a couple of minutes.
 
@@ -693,12 +697,12 @@ TTLs), so the whole suite runs in a couple of minutes.
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE.txt)
 
 
 ### Caller-defined finalization
 
-Set `WORKGRAPH_FINALIZATION` to JSON containing `instructions` and an optional
+Set `ICE_WORKGRAPH_FINALIZATION` to JSON containing `instructions` and an optional
 `timeoutMs` (default 3600000). After verification, the coordinator dispatches a
 `finalizer` role with those instructions and a structured result schema. It closes
 the issue only when both the execution and the result report success. A missing
@@ -710,7 +714,7 @@ opaque `data`. The result is stored in `workgraph_finalization_result`;
 `workgraph_finalization_status` reports progress. UIs may supply their own presets.
 
 The Pi subagents adapter accepts per-role `options` alongside `routes` in
-`WORKGRAPH_SUBAGENTS_EXECUTOR`: opaque `model`, optional `thinking` (requires
+`ICE_WORKGRAPH_SUBAGENTS_EXECUTOR`: opaque `model`, optional `thinking` (requires
 an explicit model), and `skills` names. Thinking is encoded using Pi's model
 suffix. Explicit skills are passed via Pi's native skill selection. With
 finalization enabled, the adapter creates one retained Git worktree per workflow

@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { compact } from "@earendil-works/pi-coding-agent";
+import type { compact } from "@zykairotis/ice-coding-agent";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bindExec, getExecLog, resetExecLog } from "./bd.ts";
 import {
@@ -82,7 +82,7 @@ afterEach(() => {
 
 describe("injection gate", () => {
   it("injects nothing for an uninitialized directory (no .beads/)", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "pi-workgraph-ctx-noinit-"));
+    const dir = mkdtempSync(join(tmpdir(), "ice-workgraph-ctx-noinit-"));
     try {
       const mock = makeInjectionHarness();
       const { ctx } = makeEventContext(dir);
@@ -90,7 +90,7 @@ describe("injection gate", () => {
         systemPrompt: BASE_PROMPT,
       });
       expect(result).toBe(BASE_PROMPT);
-      expect(result).not.toContain("<workgraph>");
+      expect(result).not.toContain("<ice-workgraph>");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -104,8 +104,8 @@ describe("injection gate", () => {
       systemPrompt: BASE_PROMPT,
     });
     expect(result.startsWith(BASE_PROMPT)).toBe(true);
-    expect(result).toContain("<workgraph>");
-    expect(result).toContain("</workgraph>");
+    expect(result).toContain("<ice-workgraph>");
+    expect(result).toContain("</ice-workgraph>");
   }, 30_000);
 });
 
@@ -117,10 +117,10 @@ describe("section content", () => {
     const result = await mock.emitBeforeAgentStart(ctx, {
       systemPrompt: BASE_PROMPT,
     });
-    expect(result).toContain("<workgraph>");
+    expect(result).toContain("<ice-workgraph>");
     expect(result).toContain("Ready issues: none claimable right now.");
     expect(result).toContain("Current claim: none.");
-    expect(result).toContain("workgraph_claim");
+    expect(result).toContain("ice_workgraph_claim");
   }, 30_000);
 
   it("caps rendering at top-5 and folds the rest into the count", async () => {
@@ -177,7 +177,7 @@ describe("cache TTL", () => {
   }, 30_000);
 
   it("cachedGraphState reflects a mid-session bd init after expiry", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "pi-workgraph-ctx-lateinit-"));
+    const dir = mkdtempSync(join(tmpdir(), "ice-workgraph-ctx-lateinit-"));
     try {
       makeInjectionHarness(); // binds exec
       const first = await cachedGraphState(dir, { now: () => nowMs });
@@ -205,7 +205,7 @@ describe("post-compaction persistence (unit)", () => {
     const full = await mock.emitBeforeAgentStart(ctx, {
       systemPrompt: BASE_PROMPT,
     });
-    expect(full).toContain("<workgraph>");
+    expect(full).toContain("<ice-workgraph>");
 
     // Compaction dropped everything: per-turn append re-adds it fresh.
     const truncated = "[conversation compacted: summary only]";
@@ -213,7 +213,7 @@ describe("post-compaction persistence (unit)", () => {
       systemPrompt: truncated,
     });
     expect(next.startsWith(truncated)).toBe(true);
-    expect(next).toContain("<workgraph>");
+    expect(next).toContain("<ice-workgraph>");
     expect(next).toContain(graph.seededIds[0]!);
   }, 30_000);
 });

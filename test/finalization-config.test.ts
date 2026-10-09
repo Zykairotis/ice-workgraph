@@ -23,11 +23,11 @@ describe("generic workflow configuration", () => {
   it("round trips arbitrary finalizer instructions and per-role skill names", () => {
     const mock = makeMockPi();
     mock.setFlag(
-      "workgraph-finalization",
+      "ice-workgraph-finalization",
       JSON.stringify({ instructions: "Export the result", timeoutMs: 42000 }),
     );
     mock.setFlag(
-      "workgraph-subagents-executor",
+      "ice-workgraph-subagents-executor",
       JSON.stringify({
         enabled: true,
         routes: { planned: { finalizer: "exporter" } },
@@ -59,7 +59,7 @@ describe("generic workflow configuration", () => {
     "fails startup for invalid finalization instead of silently disabling it (%s)",
     (value) => {
       const mock = makeMockPi();
-      mock.setFlag("workgraph-finalization", value);
+      mock.setFlag("ice-workgraph-finalization", value);
       expect(() => resolveConfig(asExtensionAPI(mock))).toThrow();
     },
   );

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * PI_WORKGRAPH_PUSH_GUARD — a git pre-push hook that turns "heads up, I'm
+ * ICE_WORKGRAPH_PUSH_GUARD — a git pre-push hook that turns "heads up, I'm
  * restacking — don't push" from an advisory broadcast into verified state,
- * using the pi-workgraph Lease Convention (Convention-Version 1) as a pure
+ * using the Workgraph Lease Convention (Convention-Version 1) as a pure
  * DETECTOR: it reads the three lease metadata keys and never writes them.
  *
  * How it works: one designated "sentinel" bd issue stands for the shared
  * git ref space (the stack). Whoever performs a history rewrite claims the
- * sentinel (`workgraph_claim` stamps holder/epoch/expiry and heartbeats);
+ * sentinel (`ice_workgraph_claim` stamps holder/epoch/expiry and heartbeats);
  * this hook blocks every `git push` in any clone while that lease is live
  * and held by someone else. A crashed restacker never wedges the repo —
  * the lease TTL expires and pushes flow again.
@@ -47,7 +47,8 @@ import {
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const MARKER = "PI_WORKGRAPH_PUSH_GUARD";
+// Hooks installed before the rebrand carry the legacy marker; both identify this guard.
+const MARKERS = ["ICE_WORKGRAPH_PUSH_GUARD", "PI_WORKGRAPH_PUSH_GUARD"];
 
 /** Run a command, returning stdout or undefined on any failure. */
 function tryRun(cmd, args) {
@@ -59,7 +60,7 @@ function tryRun(cmd, args) {
 }
 
 function fail(lines) {
-  process.stderr.write(`[workgraph push guard] ${lines.join("\n  ")}\n`);
+  process.stderr.write(`[ice-workgraph push guard] ${lines.join("\n  ")}\n`);
   process.exit(1);
 }
 
@@ -75,7 +76,8 @@ function install(argv) {
 
   let chainedNote = "";
   const foreign =
-    existsSync(target) && !readFileSync(target, "utf8").includes(MARKER);
+    existsSync(target) &&
+    !MARKERS.some((marker) => readFileSync(target, "utf8").includes(marker));
   if (foreign) {
     if (existsSync(chained)) {
       fail([
@@ -90,9 +92,9 @@ function install(argv) {
   }
   copyFileSync(fileURLToPath(import.meta.url), target);
   chmodSync(target, 0o755);
-  execFileSync("git", ["config", "workgraph.stackIssue", issue]);
+  execFileSync("git", ["config", "ice.workgraphStackIssue", issue]);
   process.stdout.write(
-    `[workgraph push guard] installed ${target}; sentinel issue: ${issue}${chainedNote}\n`,
+    `[ice-workgraph push guard] installed ${target}; sentinel issue: ${issue}${chainedNote}\n`,
   );
 }
 
@@ -111,7 +113,9 @@ function runChained(argv) {
 
 function guard() {
   const issueId =
+    process.env.ICE_WORKGRAPH_STACK_ISSUE?.trim() ||
     process.env.WORKGRAPH_STACK_ISSUE?.trim() ||
+    tryRun("git", ["config", "--get", "ice.workgraphStackIssue"])?.trim() ||
     tryRun("git", ["config", "--get", "workgraph.stackIssue"])?.trim();
   if (!issueId) return; // unconfigured -> inert
 
@@ -121,7 +125,7 @@ function guard() {
     fail([
       `cannot verify sentinel issue ${issueId} (bd unreachable or issue missing).`,
       "A configured guard does not guess: fix the sentinel or unset",
-      "`git config workgraph.stackIssue` to disable. (Humans: git push --no-verify)",
+      "`git config --unset ice.workgraphStackIssue` (and any legacy workgraph.stackIssue) to disable.",
     ]);
   }
 
@@ -139,7 +143,7 @@ function guard() {
   if (expires <= Date.now()) return; // expired = reclaimable, do not block
 
   const holder = String(meta.lease_holder ?? "unknown");
-  const me = process.env.WORKGRAPH_WORKER_ID?.trim();
+  const me = process.env.ICE_WORKGRAPH_WORKER_ID?.trim() || process.env.WORKGRAPH_WORKER_ID?.trim();
   if (me && holder === me) return; // your own restack window
 
   const seconds = Math.ceil((expires - Date.now()) / 1000);

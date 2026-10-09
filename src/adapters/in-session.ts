@@ -34,7 +34,7 @@
  * isolation-requiring request (`selectExecutor` filters it out) unless an
  * operator pins it via explicit `executorId` config.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@zykairotis/ice-coding-agent";
 import type { WorkgraphConfig } from "../config.ts";
 import { DISPATCH_MESSAGE_TYPE } from "../dispatch.ts";
 import {

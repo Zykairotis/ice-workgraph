@@ -7,7 +7,7 @@
  * the coordinator's `parseMessage` gates pass and only SEMANTIC checks
  * (correlation ids, fencing triple) decide the outcome.
  */
-import type { EventBus } from "@earendil-works/pi-coding-agent";
+import type { EventBus } from "@zykairotis/ice-coding-agent";
 import {
   CH,
   Discover,

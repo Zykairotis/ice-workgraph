@@ -79,7 +79,7 @@ export const LEGAL: Record<WorkgraphPhase, readonly WorkgraphPhase[]> = {
 
 /**
  * Initialization edges for LEGACY issues (no phase at all): approval
- * (`workgraph_approve`) enters at `ready`; a compat-mode coordinator claim
+ * (`ice_workgraph_approve`) enters at `ready`; a compat-mode coordinator claim
  * enters at `implementing`. Both stamp `workgraph_lifecycle_version: 1`
  * per issue, without a bulk rewrite.
  */
@@ -343,7 +343,7 @@ export async function escalate(
  * compare-and-set discipline as {@link transition}. Like {@link escalate},
  * this is deliberately NOT a LEGAL edge: it is the human recovery path the
  * failure-modes table documents ("escalation is recoverable via
- * re-approve"), owned by `workgraph_approve` with its own audit. The caller
+ * re-approve"), owned by `ice_workgraph_approve` with its own audit. The caller
  * reopens the bd status — escalation parked the issue as `blocked`, and a
  * blocked issue never re-enters the ready pool.
  */

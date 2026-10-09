@@ -1,4 +1,4 @@
-name: Tag and Release
+name: ICE Workgraph Release Preflight
 
 # Releases happen from push-triggered runs: merging the release-please PR
 # pushes to main, where the reusable workflow detects the pending release and
@@ -6,22 +6,19 @@ name: Tag and Release
 # trusted-publishing OIDC exchange rejects tokens from that trigger.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 permissions:
-  pull-requests: write
-  contents: write
-  id-token: write
-  actions: write
+  contents: read
 
 jobs:
-  node:
-    uses: gjtorikian/actions/.github/workflows/node_package_release.yml@main
-    secrets:
-      gh_token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      version_filepath: package.json
-      prepare: ${{ github.event_name == 'push' }}
-      release: ${{ github.event_name == 'workflow_dispatch' }}
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm pack --dry-run --json
+      - run: echo "Publishing disabled until owned registry and approval gates are configured."

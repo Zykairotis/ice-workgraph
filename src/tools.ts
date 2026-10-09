@@ -4,12 +4,12 @@
  * pi's truncateTail, and every tool declares `executionMode: "sequential"`
  * because bd's embedded Dolt panics on concurrent in-process access.
  *
- * Phase 3 re-cuts the surface (plan §8): `workgraph_approve` moves
+ * Phase 3 re-cuts the surface (plan §8): `ice_workgraph_approve` moves
  * draft/legacy work into the approved ready pool with acceptance criteria,
- * workflow class, and risk tier; `workgraph_close` permits only `accepted`
+ * workflow class, and risk tier; `ice_workgraph_close` permits only `accepted`
  * work (reviewed/planned work closes through judgment; one-shot work through
  * the coordinator's verification tail — executors never self-close);
- * `workgraph_override` is the ONE unguarded mutation left — an explicit
+ * `ice_workgraph_override` is the ONE unguarded mutation left — an explicit
  * human close/release that bypasses phase and fencing guards and is always
  * audited with the actor and a REQUIRED reason.
  */
@@ -17,13 +17,14 @@ import type {
   AgentToolResult,
   ExtensionAPI,
   ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+} from "@zykairotis/ice-coding-agent";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
   truncateTail,
-} from "@earendil-works/pi-coding-agent";
+} from "@zykairotis/ice-coding-agent";
 import { recordLeaseEvent } from "./audit.ts";
+import { requireWorkgraphMutation, withIceAccess } from "./ice-authorization.ts";
 import {
   addDependency,
   close,
@@ -112,7 +113,8 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
    * readable at load), record the session id for workerId(), and verify the
    * bd binary + workspace before touching the graph.
    */
-  async function prepare(ctx: ExtensionContext): Promise<WorkgraphConfig> {
+  async function prepare(ctx: ExtensionContext, write = true): Promise<WorkgraphConfig> {
+    if (write) requireWorkgraphMutation(ctx);
     const config = resolveConfig(pi);
     setWorkerIdOverride(config.workerIdOverride);
     noteSessionId(ctx.sessionManager.getSessionId());
@@ -120,20 +122,20 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
     return config;
   }
 
-  pi.registerTool({
-    name: "workgraph_ready",
+  pi.registerTool(withIceAccess("read", {
+    name: "ice_workgraph_ready",
     label: "Ready work",
     description:
       "List dispatchable issues in the work graph: approved lifecycle-v1 issues in phase ready (dependency-unblocked, unassigned). " +
-      "Pass legacy: true to list legacy issues (no lifecycle version) awaiting workgraph_approve instead.",
+      "Pass legacy: true to list legacy issues (no lifecycle version) awaiting ice_workgraph_approve instead.",
     promptSnippet: "List claimable work-graph issues",
     promptGuidelines: [
-      "Use workgraph_ready to find work; never parse bd output from bash.",
+      "Use ice_workgraph_ready to find work; never parse bd output from bash.",
     ],
     parameters: ReadyParams,
     executionMode: "sequential",
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      await prepare(ctx);
+      await prepare(ctx, false);
       const limit = params.limit ?? 10;
       // Fetch unlimited and filter client-side (`-n 0`): lifecycle phase is
       // metadata, which bd's ready query cannot filter on.
@@ -150,20 +152,20 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
           ? "No legacy issues awaiting approval."
           : renderIssueList(issues)
         : issues.length === 0
-          ? "No approved issues ready to dispatch. (Drafts and legacy issues need workgraph_approve; list them with legacy: true.)"
+          ? "No approved issues ready to dispatch. (Drafts and legacy issues need ice_workgraph_approve; list them with legacy: true.)"
           : renderIssueList(issues);
       return textResult(text, { issues });
     },
-  });
+  }));
 
-  pi.registerTool({
-    name: "workgraph_claim",
+  pi.registerTool(withIceAccess("write", {
+    name: "ice_workgraph_claim",
     label: "Claim work",
     description:
       "Atomically claim an issue: pass an id to claim that issue, or omit it to claim the next ready one",
     promptSnippet: "Atomically claim a work-graph issue",
     promptGuidelines: [
-      "Use workgraph_claim before starting work on an issue; claiming is atomic and race-safe.",
+      "Use ice_workgraph_claim before starting work on an issue; claiming is atomic and race-safe.",
     ],
     parameters: ClaimParams,
     executionMode: "sequential",
@@ -196,18 +198,18 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
           );
       }
     },
-  });
+  }));
 
-  pi.registerTool({
-    name: "workgraph_release",
+  pi.registerTool(withIceAccess("write", {
+    name: "ice_workgraph_release",
     label: "Release work",
     description:
       "Voluntarily release an issue this session claimed back to the ready pool (clears assignee, reopens). " +
       "Fencing requirement: releases only a lease this session holds, verified against the lease_epoch fencing token. " +
-      "A human unsticking someone else's claim uses workgraph_override (action: release) with a reason.",
+      "A human unsticking someone else's claim uses ice_workgraph_override (action: release) with a reason.",
     promptSnippet: "Release a claimed work-graph issue",
     promptGuidelines: [
-      "Use workgraph_release to hand back an issue you will not finish; it only works for issues this session claimed.",
+      "Use ice_workgraph_release to hand back an issue you will not finish; it only works for issues this session claimed.",
     ],
     parameters: ReleaseParams,
     executionMode: "sequential",
@@ -222,7 +224,7 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
           `Cannot release ${params.id}: this session holds no tracked lease on it, ` +
             `and releasing requires passing the lease fencing check (epoch + holder). ` +
             `If another worker holds it, leave it to them or to the expiry sweep; ` +
-            `a human override uses workgraph_override (action: release) with a reason.`,
+            `a human override uses ice_workgraph_override (action: release) with a reason.`,
         );
       }
       // Fenced release: verifies the epoch, unsets holder/expiry metadata,
@@ -233,20 +235,20 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         id: params.id,
       });
     },
-  });
+  }));
 
-  pi.registerTool({
-    name: "workgraph_close",
+  pi.registerTool(withIceAccess("write", {
+    name: "ice_workgraph_close",
     label: "Close work",
     description:
       "Close an ACCEPTED issue this session claimed, optionally recording a reason. " +
       "Judgment gate: only issues whose workgraph_phase is accepted (past judgment) may be closed — " +
       "implementation completion is reported to the coordinator and judged, never self-closed. " +
       "Fencing requirement: close is a holder write — it requires a lease this session holds, verified against the lease_epoch fencing token. " +
-      "A human closing anything else uses workgraph_override (action: close) with a reason.",
+      "A human closing anything else uses ice_workgraph_override (action: close) with a reason.",
     promptSnippet: "Close an accepted work-graph issue",
     promptGuidelines: [
-      "Use workgraph_close with a short reason only when an issue you claimed has passed judgment (phase accepted).",
+      "Use ice_workgraph_close with a short reason only when an issue you claimed has passed judgment (phase accepted).",
     ],
     parameters: CloseParams,
     executionMode: "sequential",
@@ -261,8 +263,8 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         throw new Error(
           `Cannot close ${params.id}: this session holds no tracked lease on it, ` +
             `and closing requires passing the lease fencing check (epoch + holder). ` +
-            `Claim it first with workgraph_claim; a human override uses ` +
-            `workgraph_override (action: close) with a reason.`,
+            `Claim it first with ice_workgraph_claim; a human override uses ` +
+            `ice_workgraph_override (action: close) with a reason.`,
         );
       }
       const cur = await show(ctx.cwd, params.id);
@@ -292,7 +294,7 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
           `Cannot close ${params.id}: only issues in lifecycle phase "accepted" may be closed ` +
             `(current phase: ${phase ?? "none — not under lifecycle management"}). ` +
             `Completed implementation is judged by the coordinator's judgment gate before closing; ` +
-            `a human override uses workgraph_override (action: close) with a reason.`,
+            `a human override uses ice_workgraph_override (action: close) with a reason.`,
         );
       }
       // Close as the actor stored at acquire time — never ambient identity.
@@ -301,16 +303,16 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
       const reasonNote = params.reason ? `: ${params.reason}` : "";
       return textResult(`Closed ${params.id}${reasonNote}`, { id: params.id });
     },
-  });
+  }));
 
-  pi.registerTool({
-    name: "workgraph_split",
+  pi.registerTool(withIceAccess("write", {
+    name: "ice_workgraph_split",
     label: "Split work",
     description:
       "Split an issue into child issues; the parent is blocked until every child closes",
     promptSnippet: "Split a work-graph issue into children",
     promptGuidelines: [
-      "Use workgraph_split when an issue is too large to claim whole.",
+      "Use ice_workgraph_split when an issue is too large to claim whole.",
     ],
     parameters: SplitParams,
     executionMode: "sequential",
@@ -347,7 +349,7 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           throw new Error(
-            `workgraph_split partial failure: created ${
+            `ice_workgraph_split partial failure: created ${
               created.length
             } of ${params.children.length} children (${created
               .map((c) => c.id)
@@ -363,7 +365,7 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           throw new Error(
-            `workgraph_split partial failure: all ${created.length} children created (${created
+            `ice_workgraph_split partial failure: all ${created.length} children created (${created
               .map((c) => c.id)
               .join(", ")}) but only [${linked.join(", ")}] linked to ${
               params.id
@@ -377,10 +379,10 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         { parentId: params.id, children: created },
       );
     },
-  });
+  }));
 
-  pi.registerTool({
-    name: "workgraph_approve",
+  pi.registerTool(withIceAccess("write", {
+    name: "ice_workgraph_approve",
     label: "Approve work",
     description:
       "Approve a draft or legacy issue for dispatch: records acceptance criteria (bd's native field), " +
@@ -389,7 +391,7 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
       "The coordinator only dispatches approved ready work.",
     promptSnippet: "Approve a work-graph issue for dispatch",
     promptGuidelines: [
-      "Use workgraph_approve to move a draft, legacy, or escalated issue into the dispatchable ready pool, with acceptance criteria the judgment gate will check.",
+      "Use ice_workgraph_approve to move a draft, legacy, or escalated issue into the dispatchable ready pool, with acceptance criteria the judgment gate will check.",
     ],
     parameters: ApproveParams,
     executionMode: "sequential",
@@ -409,7 +411,7 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         throw new Error(
           `Cannot approve ${params.id}: approval moves draft, legacy, or escalated issues ` +
             `to ready, but its phase is "${phase}". Mid-flight work is recovered with ` +
-            `workgraph_override (action: release), which resets it to draft for re-approval.`,
+            `ice_workgraph_override (action: release), which resets it to draft for re-approval.`,
         );
       }
       const riskTier = params.riskTier ?? DEFAULT_RISK_TIER;
@@ -479,19 +481,19 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         { id: params.id, riskTier, workflowClass, requestedWorkflowClass },
       );
     },
-  });
+  }));
 
-  pi.registerTool({
-    name: "workgraph_override",
+  pi.registerTool(withIceAccess("write", {
+    name: "ice_workgraph_override",
     label: "Override",
     description:
       "EXPLICIT human override: close an issue or release it back to the pool, bypassing the " +
       "lifecycle phase guards and lease fencing. Release also resets any lifecycle phase to " +
-      "draft (audited) so the issue is recoverable via workgraph_approve. The only unguarded " +
+      "draft (audited) so the issue is recoverable via ice_workgraph_approve. The only unguarded " +
       "mutation in the tool surface — always audited with the acting identity and the REQUIRED reason.",
     promptSnippet: "Human override: force-close or force-release an issue",
     promptGuidelines: [
-      "Use workgraph_override only on explicit human instruction, with the human's reason; normal completion goes through the coordinator's judgment gate.",
+      "Use ice_workgraph_override only on explicit human instruction, with the human's reason; normal completion goes through the coordinator's judgment gate.",
     ],
     parameters: OverrideParams,
     executionMode: "sequential",
@@ -500,7 +502,7 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
       const actor = defaultLeaseActor();
       // A release of a lifecycle-v1 issue also resets the phase to draft:
       // without it the phase would stay wherever the run left it (judging,
-      // escalated, ...), workgraph_approve would refuse it, and the
+      // escalated, ...), ice_workgraph_approve would refuse it, and the
       // coordinator would never claim it — stranded outside the tool
       // surface. Read the prior phase first so the reset is audited.
       const priorPhase = phaseOf(await show(ctx.cwd, params.id));
@@ -544,28 +546,28 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
       return textResult(
         `Override-released ${params.id} back to the pool (reason: ${params.reason})` +
           (resetsPhase
-            ? ` — phase reset ${priorPhase} → draft (re-approve with workgraph_approve)`
+            ? ` — phase reset ${priorPhase} → draft (re-approve with ice_workgraph_approve)`
             : "") +
           ` — audited as ${actor.bdActor}.`,
         { id: params.id, action: params.action },
       );
     },
-  });
+  }));
 
-  pi.registerTool({
-    name: "workgraph_status",
+  pi.registerTool(withIceAccess("read", {
+    name: "ice_workgraph_status",
     label: "Work status",
     description:
       "Show one issue's full workgraph state: lifecycle phase, acceptance criteria, risk tier, " +
       "workflow run, attempt, last verdict, executor, and the lease (holder, epoch, expiry).",
     promptSnippet: "Show a work-graph issue's lifecycle and lease state",
     promptGuidelines: [
-      "Use workgraph_status to inspect where an issue is in the lifecycle before acting on it.",
+      "Use ice_workgraph_status to inspect where an issue is in the lifecycle before acting on it.",
     ],
     parameters: StatusParams,
     executionMode: "sequential",
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      await prepare(ctx);
+      await prepare(ctx, false);
       const issue = await show(ctx.cwd, params.id);
       const phase = phaseOf(issue);
       const metadata = issue.metadata ?? {};
@@ -575,7 +577,7 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         `Lifecycle: ${
           isLifecycleV1(issue)
             ? `v1, phase ${phase ?? "unknown"}`
-            : "legacy (not yet approved — workgraph_approve moves it to ready)"
+            : "legacy (not yet approved — ice_workgraph_approve moves it to ready)"
         }`,
       ];
       if (issue.acceptance_criteria) {
@@ -618,16 +620,16 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         lastVerdict: verdict ?? null,
       });
     },
-  });
+  }));
 
-  pi.registerTool({
-    name: "workgraph_heartbeat",
+  pi.registerTool(withIceAccess("write", {
+    name: "ice_workgraph_heartbeat",
     label: "Heartbeat",
     description:
       "Renew the leases on the issues this worker currently holds (extends lease_expires_at; verifies the fencing epoch first)",
     promptSnippet: "Renew the lease on claimed work-graph issues",
     promptGuidelines: [
-      "Call workgraph_heartbeat periodically while working a claimed issue so the lease does not expire and get reclaimed.",
+      "Call ice_workgraph_heartbeat periodically while working a claimed issue so the lease does not expire and get reclaimed.",
     ],
     parameters: HeartbeatParams,
     executionMode: "sequential",
@@ -677,5 +679,5 @@ export function registerWorkgraphTools(pi: ExtensionAPI): void {
         leases: renewed,
       });
     },
-  });
+  }));
 }

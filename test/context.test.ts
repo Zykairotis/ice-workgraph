@@ -1,13 +1,13 @@
 /**
  * Contract criterion 5: after a forced compaction, the next
- * `before_agent_start` output still contains the fenced `<workgraph>`
+ * `before_agent_start` output still contains the fenced `<ice-workgraph>`
  * section with live graph data — per-turn re-injection is the
  * compaction-survival workhorse, and the Full-tier takeover shapes the
  * summary itself (mocked `compact()`; live model is Phase 4's smoke test).
  *
  * Run via `npm run test:context`.
  */
-import type { compact } from "@earendil-works/pi-coding-agent";
+import type { compact } from "@zykairotis/ice-coding-agent";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bindExec, resetExecLog } from "../src/bd.ts";
 import { registerCompactionTakeover } from "../src/compaction.ts";
@@ -83,7 +83,7 @@ describe("criterion 5: context survives forced compaction", () => {
     const before = await mock.emitBeforeAgentStart(ectx.ctx, {
       systemPrompt: BASE_PROMPT,
     });
-    expect(before).toContain("<workgraph>");
+    expect(before).toContain("<ice-workgraph>");
     expect(before).toContain(`Current claim: ${heldLease.issueId}`);
 
     // Forced compaction: the Full-tier takeover shapes the summary and
@@ -105,8 +105,8 @@ describe("criterion 5: context survives forced compaction", () => {
     });
 
     expect(after.startsWith(truncated)).toBe(true);
-    expect(after).toContain("<workgraph>");
-    expect(after).toContain("</workgraph>");
+    expect(after).toContain("<ice-workgraph>");
+    expect(after).toContain("</ice-workgraph>");
     // Live claim line with countdown, and the still-ready seeded issues.
     expect(after).toContain(`Current claim: ${heldLease.issueId}`);
     const stillReady = graph.seededIds.filter(
@@ -117,6 +117,6 @@ describe("criterion 5: context survives forced compaction", () => {
       expect(after).toContain(id);
     }
     expect(after).toContain("Ready issues (2 claimable):");
-    expect(after).toContain("workgraph_close");
+    expect(after).toContain("ice_workgraph_close");
   }, 60_000);
 });

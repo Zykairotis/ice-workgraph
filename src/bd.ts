@@ -18,7 +18,7 @@
  * leases.
  */
 import { spawnSync } from "node:child_process";
-import type { ExecOptions, ExecResult } from "@earendil-works/pi-coding-agent";
+import type { ExecOptions, ExecResult } from "@zykairotis/ice-coding-agent";
 import type { BeadsIssue } from "./types.ts";
 import {
   LEASE_EXPIRES_AT_KEY,
@@ -451,7 +451,7 @@ export interface CreateChildInput {
    * Create the issue already approved: stamps `workgraph_lifecycle_version: 1`
    * and `workgraph_phase: "ready"` at creation (one write — no draft window).
    * Unapproved issues carry no lifecycle metadata and stay legacy/draft until
-   * `workgraph_approve`.
+   * `ice_workgraph_approve`.
    */
   approved?: boolean;
 }
@@ -481,7 +481,7 @@ export async function createChild(
   const metadata: Record<string, unknown> = {};
   if (input.riskTier) metadata[WORKGRAPH_RISK_TIER_KEY] = input.riskTier;
   if (input.workflowClass) {
-    // Approved children bypass workgraph_approve, so apply the same safety
+    // Approved children bypass ice_workgraph_approve, so apply the same safety
     // promotion here: only explicitly low-risk work may skip judgment.
     const workflowClass =
       input.approved &&

@@ -2,7 +2,7 @@
  * Executor registry: discovery broadcast, deterministic offer selection,
  * and correlated request/response with bounded timeouts.
  *
- * Pi's event bus is process-local, has no replay, and `emit()` does not
+ * The ICE host event bus is process-local, has no replay, and `emit()` does not
  * await handlers — so every correlated exchange here follows the same two
  * rules: SUBSCRIBE BEFORE EMIT (a synchronous responder must never be
  * missed), and correlate by ids (`inReplyTo` → the request's `messageId`),
@@ -13,7 +13,7 @@
  * Selection is a PURE function (`selectExecutor`) — deterministic given the
  * same offers, independent of arrival order.
  */
-import type { EventBus } from "@earendil-works/pi-coding-agent";
+import type { EventBus } from "@zykairotis/ice-coding-agent";
 import {
   CH,
   ExecutorOffer,

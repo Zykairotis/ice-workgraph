@@ -32,7 +32,7 @@ import {
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import type { ExecOptions, ExecResult } from "@earendil-works/pi-coding-agent";
+import type { ExecOptions, ExecResult } from "@zykairotis/ice-coding-agent";
 import { BdError, bindExec, claim, close, show } from "../../src/bd.ts";
 import { setWorkerIdOverride, workerId } from "../../src/identity.ts";
 import {

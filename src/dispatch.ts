@@ -17,7 +17,7 @@
  * One state machine: idle → claiming → working (heartbeating) → idle. A
  * timer started in `session_start` (never in the extension factory —
  * factories run in invocations that never start sessions) plus an
- * `agent_settled` listener (Pi's TRUE idle signal — `agent_end` fires per
+ * `agent_settled` listener (the ICE host's TRUE idle signal — `agent_end` fires per
  * low-level run while retries/compaction may still be pending) both funnel
  * into one reentrancy-guarded `tick`.
  *
@@ -25,7 +25,7 @@
  * `[]` with exit 0.
  *
  * Completion detection: the wake prompt instructs the model to call
- * `workgraph_close` (or `workgraph_release`); both tools already untrack the
+ * `ice_workgraph_close` (or `ice_workgraph_release`); both tools already untrack the
  * lease in the held-lease registry (`lease.ts`), so a tick that finds
  * `getHeldLease(...) === undefined` knows the model finished — no output
  * parsing, and no tools→dispatch callback coupling.
@@ -35,7 +35,7 @@
  * the 5 s poll floor (`MIN_POLL_MS`) is applied at the index.ts wiring
  * layer only.
  */
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@zykairotis/ice-coding-agent";
 import { recordLeaseEvent } from "./audit.ts";
 import { bdBinaryAvailable, ensureWorkspace, ready } from "./bd.ts";
 import type { WorkgraphConfig } from "./config.ts";
@@ -51,8 +51,8 @@ import { clearLeaseStatus, showLeaseStatus } from "./status.ts";
 import type { BeadsIssue, Lease } from "./types.ts";
 
 /** Kill-switch flag (dash-case, matching `workgraph-worker-id`): pass
- *  `--workgraph-dispatch=false` for tools + context without autonomy. */
-export const DISPATCH_FLAG = "workgraph-dispatch";
+ *  `--ice-workgraph-dispatch=false` for tools + context without autonomy. */
+export const DISPATCH_FLAG = "ice-workgraph-dispatch";
 
 /**
  * Poll-interval floor. Applied by the index.ts wiring (never inside this
@@ -62,10 +62,10 @@ export const DISPATCH_FLAG = "workgraph-dispatch";
 export const MIN_POLL_MS = 5_000;
 
 /** `customType` on the wake message dispatch sends. */
-export const DISPATCH_MESSAGE_TYPE = "workgraph-dispatch";
+export const DISPATCH_MESSAGE_TYPE = "ice-workgraph-dispatch";
 
 /** `customType` on the zero-context-cost fencing-loss notification entry. */
-export const DISPATCH_FENCING_ENTRY_TYPE = "workgraph-dispatch-fencing";
+export const DISPATCH_FENCING_ENTRY_TYPE = "ice-workgraph-dispatch-fencing";
 
 export interface DispatchDeps {
   /** Effective config; resolved lazily (flags are not readable at load). */
@@ -107,8 +107,8 @@ export function buildWorkPrompt(issue: BeadsIssue, lease: Lease): string {
     `Your lease (epoch ${lease.epoch}) expires at ${lease.expiresAt}; it is heartbeated automatically while you work.`,
     "",
     "Work this issue now.",
-    "- When it is done, call workgraph_close with a short reason.",
-    "- If you cannot finish it, call workgraph_release to hand it back to the pool.",
+    "- When it is done, call ice_workgraph_close with a short reason.",
+    "- If you cannot finish it, call ice_workgraph_release to hand it back to the pool.",
     "- Never claim or release issues by writing assignee fields from bash; use the workgraph tools only.",
   );
   return lines.join("\n");
@@ -157,7 +157,7 @@ export function registerDispatch(
   function logSkipOnce(reason: string): void {
     if (state.lastSkipLog === reason) return;
     state.lastSkipLog = reason;
-    console.error(`[pi-workgraph] dispatch skipping: ${reason}`);
+    console.error(`[ice-workgraph] dispatch skipping: ${reason}`);
   }
 
   function clearSkipLog(): void {
@@ -236,7 +236,7 @@ export function registerDispatch(
         showLeaseStatus(ctx, held, nowFn);
         return;
       }
-      // The tools untracked the lease (workgraph_close / workgraph_release):
+      // The tools untracked the lease (ice_workgraph_close / ice_workgraph_release):
       // the model finished. Clear and fall through to claim the next issue.
       finishCurrent(ctx);
     }
@@ -362,7 +362,7 @@ export function registerDispatch(
         // lease is no longer ours to strand — log and finish shutting down.
         const msg = e instanceof Error ? e.message : String(e);
         console.error(
-          `[pi-workgraph] dispatch teardown could not release ${cur.lease.issueId}: ${msg}`,
+          `[ice-workgraph] dispatch teardown could not release ${cur.lease.issueId}: ${msg}`,
         );
       }
     }

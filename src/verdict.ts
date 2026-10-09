@@ -186,7 +186,7 @@ export async function recordVerdict(
     const msg = e instanceof Error ? e.message : String(e);
     // Loud, but non-blocking — judgment proceeds without the trail.
     console.error(
-      `[pi-workgraph] VERDICT WRITE FAILED (${issueId}): ${msg}`,
+      `[ice-workgraph] VERDICT WRITE FAILED (${issueId}): ${msg}`,
     );
   }
 }

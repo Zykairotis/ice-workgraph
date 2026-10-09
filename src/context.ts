@@ -1,6 +1,6 @@
 /**
  * Per-turn context injection: `before_agent_start` appends a fenced
- * `<workgraph>` section to the system prompt every turn — current claim,
+ * `<ice-workgraph>` section to the system prompt every turn — current claim,
  * lease countdown, ready count, and the collision-free claiming rules.
  *
  * Per-turn append is the compaction-survival workhorse: even when a summary
@@ -13,7 +13,7 @@
  * probe, not one per turn. Held-lease state is NOT cached — the registry is
  * in-memory and free, so the current-claim line is always live.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@zykairotis/ice-coding-agent";
 import { bdBinaryAvailable, ensureWorkspace, ready, show } from "./bd.ts";
 import { heldLeases, type HeldLease } from "./lease.ts";
 import {
@@ -167,8 +167,8 @@ function renderIssueLine(issue: BeadsIssue): string {
 }
 
 /**
- * Render the fenced `<workgraph>` section (leading newlines included so it
- * appends cleanly). Fenced in `<workgraph>` tags for testability.
+ * Render the fenced `<ice-workgraph>` section (leading newlines included so it
+ * appends cleanly). Fenced in `<ice-workgraph>` tags for testability.
  */
 export function renderWorkgraphSection(
   state: GraphState,
@@ -176,7 +176,7 @@ export function renderWorkgraphSection(
   nowMs: number,
   heldViews?: Map<string, HeldIssueView>,
 ): string {
-  const lines: string[] = ["", "", "<workgraph>", "Work graph (beads) status:"];
+  const lines: string[] = ["", "", "<ice-workgraph>", "Work graph (beads) status:"];
 
   if (held.length === 0) {
     lines.push("Current claim: none.");
@@ -208,15 +208,15 @@ export function renderWorkgraphSection(
       lines.push(renderIssueLine(issue));
     }
     const more = state.readyCount - state.readyTop.length;
-    if (more > 0) lines.push(`- ...and ${more} more (workgraph_ready lists them).`);
+    if (more > 0) lines.push(`- ...and ${more} more (ice_workgraph_ready lists them).`);
   }
 
   lines.push(
     "Claiming rules:",
-    "1. Ready work is dispatched by the workgraph coordinator to a registered executor — do not claim from the ready pool yourself. To deliberately pick up one specific issue, use workgraph_claim (atomic, race-safe); never claim with `bd update` or by editing assignees from bash.",
+    "1. Automatic dispatch is opt-in. If the coordinator is enabled it assigns approved work; otherwise explicitly use ice_workgraph_claim in an authorized ICE build session. Never claim with `bd update` or by editing assignees from bash.",
     "2. Never write an assignee field from bash — claims and releases go through the workgraph tools so leases stay consistent.",
-    "3. Completion is REPORTED to the coordinator, which records the result and runs the judgment gate (review, revision, verification) — implementers never close their own work. workgraph_close succeeds only for issues whose lifecycle phase is accepted (past judgment); an explicit human override uses workgraph_override with a reason. Hand back a claim you will not finish with workgraph_release; never leave one dangling.",
-    "</workgraph>",
+    "3. Delegated completion is reported to the coordinator for review, revision and verification; implementers never self-approve. ice_workgraph_close succeeds only for accepted issues; explicit human override uses ice_workgraph_override with a reason. Release an unfinished manual claim using ice_workgraph_release.",
+    "</ice-workgraph>",
   );
   return lines.join("\n");
 }

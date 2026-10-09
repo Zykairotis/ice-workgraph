@@ -214,6 +214,6 @@ export async function recordPlan(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     // Loud, but non-blocking — the lifecycle proceeds without the trail.
-    console.error(`[pi-workgraph] PLAN WRITE FAILED (${issueId}): ${msg}`);
+    console.error(`[ice-workgraph] PLAN WRITE FAILED (${issueId}): ${msg}`);
   }
 }

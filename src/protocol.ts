@@ -1,5 +1,5 @@
 /**
- * Protocol v1: the versioned execution envelopes pi-workgraph delegates
+ * Protocol v1: the versioned execution envelopes ICE Workgraph delegates
  * through (README "Protocol channels" — the twelve `workgraph:v1:*`
  * channels; the {@link CH} constants must stay name-for-name identical to
  * that table).
@@ -16,7 +16,7 @@
  * `protocolVersion: Type.Literal(1)` is the hard gate — a v2 message is
  * rejected, never half-understood.
  */
-import { StringEnum } from "@earendil-works/pi-ai";
+import { StringEnum } from "@zykairotis/ice-ai";
 import { type Static, type TSchema, Type } from "typebox";
 import { Value } from "typebox/value";
 import { WorkflowClass } from "./types.ts";

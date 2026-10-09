@@ -301,7 +301,7 @@ describe("ensureWorkspace", () => {
     const { mkdtempSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const bare = mkdtempSync(join(tmpdir(), "pi-workgraph-bare-"));
+    const bare = mkdtempSync(join(tmpdir(), "ice-workgraph-bare-"));
     try {
       await expect(ensureWorkspace(bare)).rejects.toThrow(/bd init/);
     } finally {

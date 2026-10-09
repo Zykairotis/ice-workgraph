@@ -1,5 +1,5 @@
 /**
- * Shared data shapes and tool parameter schemas for pi-workgraph.
+ * Shared data shapes and tool parameter schemas for ICE Workgraph.
  *
  * bd guarantees five fields on every issue (`id`, `title`, `status`,
  * `priority`, `issue_type`); everything else is optional — issues created
@@ -7,7 +7,7 @@
  * Treating any non-guaranteed field as required is how prior art crashed on
  * minimally-populated issues.
  */
-import { StringEnum } from "@earendil-works/pi-ai";
+import { StringEnum } from "@zykairotis/ice-ai";
 import { type Static, Type } from "typebox";
 
 /** A reference to another issue inside a `dependencies` array. */
@@ -189,9 +189,9 @@ export type LeaseEvent =
   | "run-completed"
   /** Coordinator (phase 2): a run:completed failed the fencing triple — ignored. */
   | "stale-result-rejected"
-  /** workgraph_approve: draft/legacy issue approved into the ready phase. */
+  /** ice_workgraph_approve: draft/legacy issue approved into the ready phase. */
   | "approve"
-  /** workgraph_override: audited human close/release bypassing phase guards. */
+  /** ice_workgraph_override: audited human close/release bypassing phase guards. */
   | "override"
   /** Judgment (phase 3): a review was discarded (non-independent or invalid). */
   | "review-rejected"
@@ -283,7 +283,7 @@ export const Plan = Type.Object({
 export type PlanT = Static<typeof Plan>;
 
 // ---------------------------------------------------------------------------
-// Tool parameter schemas (TypeBox). Pi validates tool-call arguments against
+// Tool parameter schemas (TypeBox). ICE validates tool-call arguments against
 // these before the handler runs.
 // ---------------------------------------------------------------------------
 

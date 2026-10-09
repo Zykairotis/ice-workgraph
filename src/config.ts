@@ -4,7 +4,7 @@
  * then default. The timers are consumed by the Phase 2 lease layer; only the
  * identity override is load-bearing in Phase 1.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@zykairotis/ice-coding-agent";
 import type { PolicyOverrides } from "./policy.ts";
 import type { WorkflowClassT } from "./types.ts";
 
@@ -90,7 +90,7 @@ export interface WorkgraphConfig {
   /**
    * Opt-in: let the coordinator auto-dispatch LEGACY issues (no
    * `workgraph_lifecycle_version`). Default FALSE — legacy issues are
-   * skipped until approved via `workgraph_approve` (README "Legacy
+   * skipped until approved via `ice_workgraph_approve` (README "Legacy
    * compatibility": never an implicit default). When enabled, the
    * coordinator warns ONCE per session that legacy auto-dispatch is active
    * and that each claim initializes lifecycle metadata and enters phase
@@ -117,63 +117,63 @@ export const DEFAULT_ACCEPT_TIMEOUT_MS = 10_000;
 
 const FLAGS = [
   {
-    name: "workgraph-lease-ttl-ms",
-    description: `Workgraph lease TTL in milliseconds (default ${DEFAULT_LEASE_TTL_MS}; env WORKGRAPH_LEASE_TTL_MS)`,
+    name: "ice-workgraph-lease-ttl-ms",
+    description: `Workgraph lease TTL in milliseconds (default ${DEFAULT_LEASE_TTL_MS}; env ICE_WORKGRAPH_LEASE_TTL_MS)`,
   },
   {
-    name: "workgraph-heartbeat-ms",
-    description: `Workgraph heartbeat interval in milliseconds (default ${DEFAULT_HEARTBEAT_MS}; env WORKGRAPH_HEARTBEAT_MS)`,
+    name: "ice-workgraph-heartbeat-ms",
+    description: `Workgraph heartbeat interval in milliseconds (default ${DEFAULT_HEARTBEAT_MS}; env ICE_WORKGRAPH_HEARTBEAT_MS)`,
   },
   {
-    name: "workgraph-poll-ms",
-    description: `Workgraph ready-pool poll interval in milliseconds (default ${DEFAULT_POLL_MS}; env WORKGRAPH_POLL_MS)`,
+    name: "ice-workgraph-poll-ms",
+    description: `Workgraph ready-pool poll interval in milliseconds (default ${DEFAULT_POLL_MS}; env ICE_WORKGRAPH_POLL_MS)`,
   },
   {
-    name: "workgraph-sweep-interval-ms",
-    description: `Workgraph expiry-sweep interval in milliseconds (default: the poll interval; env WORKGRAPH_SWEEP_INTERVAL_MS)`,
+    name: "ice-workgraph-sweep-interval-ms",
+    description: `Workgraph expiry-sweep interval in milliseconds (default: the poll interval; env ICE_WORKGRAPH_SWEEP_INTERVAL_MS)`,
   },
   {
-    name: "workgraph-discovery-timeout-ms",
-    description: `Workgraph executor-discovery window in milliseconds (default ${DEFAULT_DISCOVERY_TIMEOUT_MS}; env WORKGRAPH_DISCOVERY_TIMEOUT_MS)`,
+    name: "ice-workgraph-discovery-timeout-ms",
+    description: `Workgraph executor-discovery window in milliseconds (default ${DEFAULT_DISCOVERY_TIMEOUT_MS}; env ICE_WORKGRAPH_DISCOVERY_TIMEOUT_MS)`,
   },
   {
-    name: "workgraph-accept-timeout-ms",
-    description: `Workgraph run-request accept deadline in milliseconds (default ${DEFAULT_ACCEPT_TIMEOUT_MS}; env WORKGRAPH_ACCEPT_TIMEOUT_MS)`,
+    name: "ice-workgraph-accept-timeout-ms",
+    description: `Workgraph run-request accept deadline in milliseconds (default ${DEFAULT_ACCEPT_TIMEOUT_MS}; env ICE_WORKGRAPH_ACCEPT_TIMEOUT_MS)`,
   },
   {
-    name: "workgraph-compat-in-session-executor",
+    name: "ice-workgraph-compat-in-session-executor",
     description:
-      "Register the in-session compatibility executor (default true; env WORKGRAPH_COMPAT_IN_SESSION_EXECUTOR; set to false with no other executor for a correctly idle coordinator)",
+      "Register the in-session compatibility executor (default true; env ICE_WORKGRAPH_COMPAT_IN_SESSION_EXECUTOR; set to false with no other executor for a correctly idle coordinator)",
   },
   {
-    name: "workgraph-executor-id",
+    name: "ice-workgraph-executor-id",
     description:
-      "Pin executor selection to one executorId; the coordinator errors (and claims nothing) when it does not offer (env WORKGRAPH_EXECUTOR_ID)",
+      "Pin executor selection to one executorId; the coordinator errors (and claims nothing) when it does not offer (env ICE_WORKGRAPH_EXECUTOR_ID)",
   },
   {
-    name: "workgraph-worker-id",
+    name: "ice-workgraph-worker-id",
     description:
-      "Override the workgraph worker identity (default {user}@{host}/{short-session-id}; env WORKGRAPH_WORKER_ID)",
+      "Override the workgraph worker identity (default {user}@{host}/{short-session-id}; env ICE_WORKGRAPH_WORKER_ID)",
   },
   {
-    name: "workgraph-policy",
+    name: "ice-workgraph-policy",
     description:
-      'Per-risk-tier judgment-gate policy overrides as a JSON object, e.g. {"low":{"maxRevisions":1}} (env WORKGRAPH_POLICY; defaults: low advisory, medium/high blocking)',
+      'Per-risk-tier judgment-gate policy overrides as a JSON object, e.g. {"low":{"maxRevisions":1}} (env ICE_WORKGRAPH_POLICY; defaults: low advisory, medium/high blocking)',
   },
   {
-    name: "workgraph-compat-legacy-issues",
+    name: "ice-workgraph-compat-legacy-issues",
     description:
-      "Opt-in: let the coordinator auto-dispatch legacy issues without workgraph_lifecycle_version (default false; env WORKGRAPH_COMPAT_LEGACY_ISSUES)",
+      "Opt-in: let the coordinator auto-dispatch legacy issues without workgraph_lifecycle_version (default false; env ICE_WORKGRAPH_COMPAT_LEGACY_ISSUES)",
   },
   {
-    name: "workgraph-subagents-executor",
+    name: "ice-workgraph-subagents-executor",
     description:
-      'Opt-in: register the experimental pi-subagents bridge — "true" or JSON with versionRange/routes (default disabled; env WORKGRAPH_SUBAGENTS_EXECUTOR)',
+      'Opt-in: register the experimental pi-subagents bridge — "true" or JSON with versionRange/routes (default disabled; env ICE_WORKGRAPH_SUBAGENTS_EXECUTOR)',
   },
   {
-    name: "workgraph-finalization",
+    name: "ice-workgraph-finalization",
     description:
-      "Optional post-verification task as JSON with instructions and timeoutMs (env WORKGRAPH_FINALIZATION)",
+      "Optional post-verification task as JSON with instructions and timeoutMs (env ICE_WORKGRAPH_FINALIZATION)",
   },
 ] as const;
 
@@ -234,7 +234,7 @@ function policyValue(
     return parsed as PolicyOverrides;
   } catch {
     console.error(
-      `[pi-workgraph] ignoring unparseable ${flag}/${envVar} value (not JSON)`,
+      `[ice-workgraph] ignoring unparseable ${flag}/${envVar} value (not JSON)`,
     );
     return undefined;
   }
@@ -273,7 +273,7 @@ function subagentsValue(
     };
   } catch {
     console.error(
-      `[pi-workgraph] ignoring unparseable ${flag}/${envVar} value (not JSON)`,
+      `[ice-workgraph] ignoring unparseable ${flag}/${envVar} value (not JSON)`,
     );
     return undefined;
   }
@@ -359,16 +359,16 @@ function parseSubagentsOptions(
 function finalizationValue(pi: ExtensionAPI): WorkgraphConfig["finalization"] {
   const raw = stringValue(
     pi,
-    "workgraph-finalization",
-    "WORKGRAPH_FINALIZATION",
+    "ice-workgraph-finalization",
+    "ICE_WORKGRAPH_FINALIZATION",
   );
   if (!raw || raw === "false") return undefined;
   const value: unknown = JSON.parse(raw);
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("workgraph-finalization must contain instructions");
+    throw new Error("ice-workgraph-finalization must contain instructions");
   const input = value as Record<string, unknown>;
   if (typeof input.instructions !== "string" || !input.instructions.trim())
-    throw new Error("workgraph-finalization requires nonempty instructions");
+    throw new Error("ice-workgraph-finalization requires nonempty instructions");
   if (
     input.timeoutMs !== undefined &&
     (typeof input.timeoutMs !== "number" ||
@@ -376,7 +376,7 @@ function finalizationValue(pi: ExtensionAPI): WorkgraphConfig["finalization"] {
       input.timeoutMs <= 0 ||
       input.timeoutMs > 2_147_483_647)
   )
-    throw new Error("workgraph-finalization timeoutMs must be positive");
+    throw new Error("ice-workgraph-finalization timeoutMs must be positive");
   return {
     instructions: input.instructions,
     ...(typeof input.timeoutMs === "number"
@@ -408,22 +408,22 @@ function boolValue(
 export function resolveConfig(pi: ExtensionAPI): WorkgraphConfig {
   const pollMs = timerValue(
     pi,
-    "workgraph-poll-ms",
-    "WORKGRAPH_POLL_MS",
+    "ice-workgraph-poll-ms",
+    "ICE_WORKGRAPH_POLL_MS",
     DEFAULT_POLL_MS,
   );
   return {
     finalization: finalizationValue(pi),
     leaseTtlMs: timerValue(
       pi,
-      "workgraph-lease-ttl-ms",
-      "WORKGRAPH_LEASE_TTL_MS",
+      "ice-workgraph-lease-ttl-ms",
+      "ICE_WORKGRAPH_LEASE_TTL_MS",
       DEFAULT_LEASE_TTL_MS,
     ),
     heartbeatMs: timerValue(
       pi,
-      "workgraph-heartbeat-ms",
-      "WORKGRAPH_HEARTBEAT_MS",
+      "ice-workgraph-heartbeat-ms",
+      "ICE_WORKGRAPH_HEARTBEAT_MS",
       DEFAULT_HEARTBEAT_MS,
     ),
     pollMs,
@@ -431,49 +431,49 @@ export function resolveConfig(pi: ExtensionAPI): WorkgraphConfig {
     // does not need to outpace dispatch.
     sweepIntervalMs: timerValue(
       pi,
-      "workgraph-sweep-interval-ms",
-      "WORKGRAPH_SWEEP_INTERVAL_MS",
+      "ice-workgraph-sweep-interval-ms",
+      "ICE_WORKGRAPH_SWEEP_INTERVAL_MS",
       pollMs,
     ),
     discoveryTimeoutMs: timerValue(
       pi,
-      "workgraph-discovery-timeout-ms",
-      "WORKGRAPH_DISCOVERY_TIMEOUT_MS",
+      "ice-workgraph-discovery-timeout-ms",
+      "ICE_WORKGRAPH_DISCOVERY_TIMEOUT_MS",
       DEFAULT_DISCOVERY_TIMEOUT_MS,
     ),
     acceptTimeoutMs: timerValue(
       pi,
-      "workgraph-accept-timeout-ms",
-      "WORKGRAPH_ACCEPT_TIMEOUT_MS",
+      "ice-workgraph-accept-timeout-ms",
+      "ICE_WORKGRAPH_ACCEPT_TIMEOUT_MS",
       DEFAULT_ACCEPT_TIMEOUT_MS,
     ),
     compatInSessionExecutor: boolValue(
       pi,
-      "workgraph-compat-in-session-executor",
-      "WORKGRAPH_COMPAT_IN_SESSION_EXECUTOR",
+      "ice-workgraph-compat-in-session-executor",
+      "ICE_WORKGRAPH_COMPAT_IN_SESSION_EXECUTOR",
       true,
     ),
     executorId: stringValue(
       pi,
-      "workgraph-executor-id",
-      "WORKGRAPH_EXECUTOR_ID",
+      "ice-workgraph-executor-id",
+      "ICE_WORKGRAPH_EXECUTOR_ID",
     ),
     workerIdOverride: stringValue(
       pi,
-      "workgraph-worker-id",
-      "WORKGRAPH_WORKER_ID",
+      "ice-workgraph-worker-id",
+      "ICE_WORKGRAPH_WORKER_ID",
     ),
-    policy: policyValue(pi, "workgraph-policy", "WORKGRAPH_POLICY"),
+    policy: policyValue(pi, "ice-workgraph-policy", "ICE_WORKGRAPH_POLICY"),
     compatLegacyIssues: boolValue(
       pi,
-      "workgraph-compat-legacy-issues",
-      "WORKGRAPH_COMPAT_LEGACY_ISSUES",
+      "ice-workgraph-compat-legacy-issues",
+      "ICE_WORKGRAPH_COMPAT_LEGACY_ISSUES",
       false,
     ),
     subagentsExecutor: subagentsValue(
       pi,
-      "workgraph-subagents-executor",
-      "WORKGRAPH_SUBAGENTS_EXECUTOR",
+      "ice-workgraph-subagents-executor",
+      "ICE_WORKGRAPH_SUBAGENTS_EXECUTOR",
     ),
   };
 }

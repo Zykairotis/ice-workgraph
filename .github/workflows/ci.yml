@@ -57,11 +57,18 @@ jobs:
           bd version
           bd version | grep -F "${BD_VERSION}"
 
+      - name: Disable bd usage metrics
+        # bd sends anonymous usage metrics by default; external telemetry stays opt-in.
+        run: bd metrics off
+
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Branding gate (legacy tokens must be rebranded or allowlisted)
+        run: npm run check:branding
 
       - name: Test (full suite, incl. cross-process race/fencing/reclaim)
         run: npm test -- --reporter=default --reporter=json --outputFile=vitest-report.json

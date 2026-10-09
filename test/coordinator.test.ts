@@ -656,7 +656,7 @@ describe("coordinator: activity events", () => {
     resetLeasesForTest();
     const graph = makeScratchGraph({ prefix: "coordact", seed: 1 });
     const id = graph.seededIds[0]!;
-    // Approve (workgraph_approve's writes): the activity trail covers the
+    // Approve (ice_workgraph_approve's writes): the activity trail covers the
     // approved-only path end to end.
     graph.bd([
       "update",
@@ -837,7 +837,7 @@ describe("in-session adapter (standalone)", () => {
     expect(prompt).toContain("wg-42");
     expect(prompt).toContain(request.workflowRunId);
     expect(prompt).toContain("moves the issue to judging");
-    expect(prompt).not.toContain("call workgraph_close");
+    expect(prompt).not.toContain("call ice_workgraph_close");
   });
 
   it("wakes with a delivery mode that self-triggers when idle — never nextTurn", () => {

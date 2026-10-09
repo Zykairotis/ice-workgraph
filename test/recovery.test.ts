@@ -1240,7 +1240,7 @@ describe("compaction run references", () => {
     expect(text).toContain("phase judging");
     expect(text).toContain("attempt 2");
     expect(text).toContain("tests pass; lint clean");
-    // The issue-only shape (workgraph_claim fallback) stays run-free.
+    // The issue-only shape (ice_workgraph_claim fallback) stays run-free.
     const bare = buildCompactionInstructions(undefined, { issueId: "wg-7" });
     expect(bare).not.toContain("workflow run");
   });

@@ -33,15 +33,15 @@ import {
 } from "../test/helpers/scratch.ts";
 
 const TOOL_NAMES = [
-  "workgraph_ready",
-  "workgraph_claim",
-  "workgraph_release",
-  "workgraph_close",
-  "workgraph_split",
-  "workgraph_heartbeat",
-  "workgraph_approve",
-  "workgraph_override",
-  "workgraph_status",
+  "ice_workgraph_ready",
+  "ice_workgraph_claim",
+  "ice_workgraph_release",
+  "ice_workgraph_close",
+  "ice_workgraph_split",
+  "ice_workgraph_heartbeat",
+  "ice_workgraph_approve",
+  "ice_workgraph_override",
+  "ice_workgraph_status",
 ] as const;
 
 let mock: MockPi;
@@ -73,7 +73,7 @@ beforeAll(() => {
   mock = makeMockPi();
   bindExec((command, args, options) => mock.exec(command, args, options));
   registerWorkgraphTools(asExtensionAPI(mock));
-  mock.setFlag("workgraph-worker-id", "test-worker-a");
+  mock.setFlag("ice-workgraph-worker-id", "test-worker-a");
   graph = makeScratchGraph({ seed: 2 });
 }, 60_000);
 
@@ -98,14 +98,14 @@ describe("registration surface", () => {
 });
 
 describe("schema validation", () => {
-  it("rejects workgraph_ready limit outside 1..50 before any handler runs", () => {
+  it("rejects ice_workgraph_ready limit outside 1..50 before any handler runs", () => {
     expect(Value.Check(ReadyParams, { limit: 0 })).toBe(false);
     expect(Value.Check(ReadyParams, { limit: 51 })).toBe(false);
     expect(Value.Check(ReadyParams, { limit: 10 })).toBe(true);
     expect(Value.Check(ReadyParams, {})).toBe(true);
   });
 
-  it("rejects workgraph_split with an empty children array", () => {
+  it("rejects ice_workgraph_split with an empty children array", () => {
     expect(Value.Check(SplitParams, { id: "x", children: [] })).toBe(false);
     expect(
       Value.Check(SplitParams, { id: "x", children: [{ title: "a" }] }),
@@ -126,7 +126,7 @@ describe("schema validation", () => {
   });
 });
 
-describe("workgraph_ready", () => {
+describe("ice_workgraph_ready", () => {
   it("lists seeded issues once approved (phase 3: the default pool is approved work)", async () => {
     for (const id of graph.seededIds) {
       graph.bd([
@@ -138,7 +138,7 @@ describe("workgraph_ready", () => {
         "workgraph_phase=ready",
       ]);
     }
-    const result = await run("workgraph_ready", {}, graph.dir);
+    const result = await run("ice_workgraph_ready", {}, graph.dir);
     const text = resultText(result);
     for (const id of graph.seededIds) expect(text).toContain(id);
     const issues = (result.details as { issues: BeadsIssue[] }).issues;
@@ -149,9 +149,9 @@ describe("workgraph_ready", () => {
     const { mkdtempSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const bare = mkdtempSync(join(tmpdir(), "pi-workgraph-tools-bare-"));
+    const bare = mkdtempSync(join(tmpdir(), "ice-workgraph-tools-bare-"));
     try {
-      await expect(run("workgraph_ready", {}, bare)).rejects.toThrow(
+      await expect(run("ice_workgraph_ready", {}, bare)).rejects.toThrow(
         /bd init/,
       );
     } finally {
@@ -160,12 +160,12 @@ describe("workgraph_ready", () => {
   });
 });
 
-describe("workgraph_claim", () => {
+describe("ice_workgraph_claim", () => {
   it("claims the next ready issue as the configured worker id and attaches the lease", async () => {
     const local = makeScratchGraph({ prefix: "tclaim" });
     try {
       const id = local.createIssue("claim target", { priority: 0 });
-      const result = await run("workgraph_claim", {}, local.dir);
+      const result = await run("ice_workgraph_claim", {}, local.dir);
       const details = result.details as { issue: BeadsIssue; lease: Lease };
       expect(details.issue.id).toBe(id);
       expect(details.issue.assignee).toBe("test-worker-a");
@@ -185,7 +185,7 @@ describe("workgraph_claim", () => {
   it("returns 'nothing ready' on an empty pool instead of throwing", async () => {
     const local = makeScratchGraph({ prefix: "tempty" });
     try {
-      const result = await run("workgraph_claim", {}, local.dir);
+      const result = await run("ice_workgraph_claim", {}, local.dir);
       expect(resultText(result)).toMatch(/nothing ready/i);
       expect((result.details as { issue: null }).issue).toBeNull();
     } finally {
@@ -198,7 +198,7 @@ describe("workgraph_claim", () => {
     try {
       local.createIssue("decoy", { priority: 0 });
       const wanted = local.createIssue("wanted", { priority: 3 });
-      const result = await run("workgraph_claim", { id: wanted }, local.dir);
+      const result = await run("ice_workgraph_claim", { id: wanted }, local.dir);
       const issue = (result.details as { issue: BeadsIssue }).issue;
       expect(issue.id).toBe(wanted);
       expect(issue.status).toBe("in_progress");
@@ -212,7 +212,7 @@ describe("workgraph_claim", () => {
     try {
       const id = local.createIssue("contested");
       local.bd(["update", id, "--claim", "--actor", "other-actor"]);
-      await expect(run("workgraph_claim", { id }, local.dir)).rejects.toThrow(
+      await expect(run("ice_workgraph_claim", { id }, local.dir)).rejects.toThrow(
         /already claimed/,
       );
     } finally {
@@ -221,13 +221,13 @@ describe("workgraph_claim", () => {
   }, 30_000);
 });
 
-describe("workgraph_release", () => {
+describe("ice_workgraph_release", () => {
   it("clears the assignee and reopens the issue", async () => {
     const local = makeScratchGraph({ prefix: "trel" });
     try {
       const id = local.createIssue("borrowed");
-      await run("workgraph_claim", { id }, local.dir);
-      const result = await run("workgraph_release", { id }, local.dir);
+      await run("ice_workgraph_claim", { id }, local.dir);
+      const result = await run("ice_workgraph_release", { id }, local.dir);
       expect(resultText(result)).toContain(`Released ${id}`);
       const issue = local.showIssue(id);
       expect(issue.status).toBe("open");
@@ -252,7 +252,7 @@ function stampAccepted(local: ScratchGraph, id: string): void {
   ]);
 }
 
-describe("workgraph_close", () => {
+describe("ice_workgraph_close", () => {
   it("closes a claimed ACCEPTED issue with a reason", async () => {
     const local = makeScratchGraph({ prefix: "tcls" });
     try {
@@ -260,10 +260,10 @@ describe("workgraph_close", () => {
       // Close is a holder write (phase 1): claim first so this session
       // holds the lease and passes the fencing check — and (phase 3) only
       // accepted work may close.
-      await run("workgraph_claim", { id }, local.dir);
+      await run("ice_workgraph_claim", { id }, local.dir);
       stampAccepted(local, id);
       const result = await run(
-        "workgraph_close",
+        "ice_workgraph_close",
         { id, reason: "shipped" },
         local.dir,
       );
@@ -278,9 +278,9 @@ describe("workgraph_close", () => {
     const local = makeScratchGraph({ prefix: "tcls2" });
     try {
       const id = local.createIssue("wrap up quietly");
-      await run("workgraph_claim", { id }, local.dir);
+      await run("ice_workgraph_claim", { id }, local.dir);
       stampAccepted(local, id);
-      await run("workgraph_close", { id }, local.dir);
+      await run("ice_workgraph_close", { id }, local.dir);
       expect(local.showIssue(id).status).toBe("closed");
     } finally {
       local.cleanup();
@@ -292,7 +292,7 @@ describe("workgraph_close", () => {
     const local = makeScratchGraph({ prefix: "tcls4" });
     try {
       const id = local.createIssue("still being judged");
-      await run("workgraph_claim", { id }, local.dir);
+      await run("ice_workgraph_claim", { id }, local.dir);
       local.bd([
         "update",
         id,
@@ -301,7 +301,7 @@ describe("workgraph_close", () => {
         "--set-metadata",
         "workgraph_phase=judging",
       ]);
-      await expect(run("workgraph_close", { id }, local.dir)).rejects.toThrow(
+      await expect(run("ice_workgraph_close", { id }, local.dir)).rejects.toThrow(
         /judg/i,
       );
       expect(local.showIssue(id).status).not.toBe("closed");
@@ -318,7 +318,7 @@ describe("workgraph_close", () => {
       // Claimed by ANOTHER actor outside this process: no tracked lease
       // here, so the fenced close must refuse instead of closing their work.
       local.bd(["update", id, "--claim", "--actor", "other-actor"]);
-      await expect(run("workgraph_close", { id }, local.dir)).rejects.toThrow(
+      await expect(run("ice_workgraph_close", { id }, local.dir)).rejects.toThrow(
         /fenc/i,
       );
       const shown = local.showIssue(id);
@@ -330,13 +330,13 @@ describe("workgraph_close", () => {
   }, 30_000);
 });
 
-describe("workgraph_approve", () => {
+describe("ice_workgraph_approve", () => {
   it("approves a draft/legacy issue: acceptance persisted, v1 + risk tier stamped, phase ready, audited", async () => {
     const local = makeScratchGraph({ prefix: "tapv" });
     try {
       const id = local.createIssue("needs approval");
       const result = await run(
-        "workgraph_approve",
+        "ice_workgraph_approve",
         { id, acceptanceCriteria: "renders the widget", riskTier: "high" },
         local.dir,
       );
@@ -362,7 +362,7 @@ describe("workgraph_approve", () => {
     try {
       const low = local.createIssue("mechanical rename");
       await run(
-        "workgraph_approve",
+        "ice_workgraph_approve",
         { id: low, riskTier: "low", workflowClass: "oneshot" },
         local.dir,
       );
@@ -372,7 +372,7 @@ describe("workgraph_approve", () => {
 
       const high = local.createIssue("sensitive rename");
       const result = await run(
-        "workgraph_approve",
+        "ice_workgraph_approve",
         { id: high, riskTier: "high", workflowClass: "oneshot" },
         local.dir,
       );
@@ -398,7 +398,7 @@ describe("workgraph_approve", () => {
         "workgraph_phase=judging",
       ]);
       await expect(
-        run("workgraph_approve", { id }, local.dir),
+        run("ice_workgraph_approve", { id }, local.dir),
       ).rejects.toThrow(/judging/);
     } finally {
       local.cleanup();
@@ -421,7 +421,7 @@ describe("workgraph_approve", () => {
         "workgraph_phase=escalated",
       ]);
       const result = await run(
-        "workgraph_approve",
+        "ice_workgraph_approve",
         { id, riskTier: "low" },
         local.dir,
       );
@@ -440,7 +440,7 @@ describe("workgraph_approve", () => {
   }, 30_000);
 });
 
-describe("workgraph_override", () => {
+describe("ice_workgraph_override", () => {
   it("override-closes a mid-judging issue with the actor and reason audited", async () => {
     const local = makeScratchGraph({ prefix: "tovr" });
     try {
@@ -456,7 +456,7 @@ describe("workgraph_override", () => {
         "workgraph_phase=judging",
       ]);
       const result = await run(
-        "workgraph_override",
+        "ice_workgraph_override",
         { id, action: "close", reason: "human decision: ship as-is" },
         local.dir,
       );
@@ -480,7 +480,7 @@ describe("workgraph_override", () => {
       const id = local.createIssue("abandoned claim");
       local.bd(["update", id, "--claim", "--actor", "gone-worker"]);
       await run(
-        "workgraph_override",
+        "ice_workgraph_override",
         { id, action: "release", reason: "worker went away" },
         local.dir,
       );
@@ -510,7 +510,7 @@ describe("workgraph_override", () => {
         "workgraph_phase=judging",
       ]);
       const result = await run(
-        "workgraph_override",
+        "ice_workgraph_override",
         { id, action: "release", reason: "stuck run" },
         local.dir,
       );
@@ -526,7 +526,7 @@ describe("workgraph_override", () => {
       expect(overrides).toHaveLength(1);
       expect(overrides[0]!.text).toContain("judging -> draft"); // audited reset
       // The documented recovery path exists end to end: draft re-approves.
-      await run("workgraph_approve", { id }, local.dir);
+      await run("ice_workgraph_approve", { id }, local.dir);
       expect((local.showIssue(id).metadata ?? {}).workgraph_phase).toBe(
         "ready",
       );
@@ -536,13 +536,13 @@ describe("workgraph_override", () => {
   }, 30_000);
 });
 
-describe("workgraph_status", () => {
+describe("ice_workgraph_status", () => {
   it("renders lifecycle, acceptance, run, verdict, and lease state", async () => {
     const local = makeScratchGraph({ prefix: "tsts" });
     try {
       const id = local.createIssue("inspect me");
       await run(
-        "workgraph_approve",
+        "ice_workgraph_approve",
         { id, acceptanceCriteria: "all tests green", riskTier: "low" },
         local.dir,
       );
@@ -567,7 +567,7 @@ describe("workgraph_status", () => {
         "--set-metadata",
         "lease_epoch=3",
       ]);
-      const result = await run("workgraph_status", { id }, local.dir);
+      const result = await run("ice_workgraph_status", { id }, local.dir);
       const text = resultText(result);
       expect(text).toContain("phase judging");
       expect(text).toContain("Acceptance: all tests green");
@@ -587,7 +587,7 @@ describe("workgraph_status", () => {
     const local = makeScratchGraph({ prefix: "tsts2" });
     try {
       const id = local.createIssue("legacy artifact");
-      const result = await run("workgraph_status", { id }, local.dir);
+      const result = await run("ice_workgraph_status", { id }, local.dir);
       expect(resultText(result)).toContain("legacy (not yet approved");
     } finally {
       local.cleanup();
@@ -595,20 +595,20 @@ describe("workgraph_status", () => {
   }, 30_000);
 });
 
-describe("workgraph_ready lifecycle filter", () => {
+describe("ice_workgraph_ready lifecycle filter", () => {
   it("defaults to approved ready issues; legacy: true lists the rest", async () => {
     const local = makeScratchGraph({ prefix: "tmix" });
     try {
       const legacyId = local.createIssue("legacy issue");
       const approvedId = local.createIssue("approved issue");
-      await run("workgraph_approve", { id: approvedId }, local.dir);
+      await run("ice_workgraph_approve", { id: approvedId }, local.dir);
 
-      const approved = await run("workgraph_ready", {}, local.dir);
+      const approved = await run("ice_workgraph_ready", {}, local.dir);
       const approvedText = resultText(approved);
       expect(approvedText).toContain(approvedId);
       expect(approvedText).not.toContain(legacyId);
 
-      const legacy = await run("workgraph_ready", { legacy: true }, local.dir);
+      const legacy = await run("ice_workgraph_ready", { legacy: true }, local.dir);
       const legacyText = resultText(legacy);
       expect(legacyText).toContain(legacyId);
       expect(legacyText).not.toContain(approvedId);
@@ -618,13 +618,13 @@ describe("workgraph_ready lifecycle filter", () => {
   }, 30_000);
 });
 
-describe("workgraph_split", () => {
+describe("ice_workgraph_split", () => {
   it("creates children and blocks the parent on each of them", async () => {
     const local = makeScratchGraph({ prefix: "tsplit" });
     try {
       const parent = local.createIssue("too big", { priority: 1 });
       const result = await run(
-        "workgraph_split",
+        "ice_workgraph_split",
         {
           id: parent,
           children: [
@@ -658,7 +658,7 @@ describe("workgraph_split", () => {
     try {
       await expect(
         run(
-          "workgraph_split",
+          "ice_workgraph_split",
           { id: `${local.prefix}-nope`, children: [{ title: "orphan" }] },
           local.dir,
         ),
@@ -673,26 +673,26 @@ describe("workgraph_split", () => {
   }, 30_000);
 });
 
-describe("workgraph_heartbeat", () => {
+describe("ice_workgraph_heartbeat", () => {
   it("reports no active lease when this process holds nothing", async () => {
     resetLeasesForTest(); // earlier claim tests tracked leases in now-deleted dirs
-    const result = await run("workgraph_heartbeat", {}, graph.dir);
+    const result = await run("ice_workgraph_heartbeat", {}, graph.dir);
     expect(resultText(result)).toMatch(/no active lease/i);
     expect((result.details as { renewed: boolean }).renewed).toBe(false);
   });
 
-  it("renews the lease acquired by workgraph_claim (same epoch, fresh expiry)", async () => {
+  it("renews the lease acquired by ice_workgraph_claim (same epoch, fresh expiry)", async () => {
     resetLeasesForTest();
     const local = makeScratchGraph({ prefix: "thb" });
     try {
       const id = local.createIssue("keep me alive", { priority: 0 });
-      await run("workgraph_claim", {}, local.dir);
+      await run("ice_workgraph_claim", {}, local.dir);
       const before = leaseExpiresAtOf(local.showIssue(id))!;
 
       // Second-precision expiry: step past the current second so the renewed
       // timestamp is observably newer.
       await new Promise((r) => setTimeout(r, 1_100));
-      const result = await run("workgraph_heartbeat", {}, local.dir);
+      const result = await run("ice_workgraph_heartbeat", {}, local.dir);
       expect(resultText(result)).toContain(`Renewed 1 lease(s)`);
       const details = result.details as { renewed: boolean; leases: Lease[] };
       expect(details.renewed).toBe(true);
@@ -714,7 +714,7 @@ describe("workgraph_heartbeat", () => {
     const local = makeScratchGraph({ prefix: "thb2" });
     try {
       const id = local.createIssue("stolen mid-work", { priority: 0 });
-      await run("workgraph_claim", {}, local.dir);
+      await run("ice_workgraph_claim", {}, local.dir);
       // Simulated reclaim by another worker: epoch bump + holder change.
       local.bd([
         "update",
@@ -724,11 +724,11 @@ describe("workgraph_heartbeat", () => {
         "--set-metadata",
         "lease_holder=w-thief",
       ]);
-      await expect(run("workgraph_heartbeat", {}, local.dir)).rejects.toThrow(
+      await expect(run("ice_workgraph_heartbeat", {}, local.dir)).rejects.toThrow(
         /reclaimed by w-thief/,
       );
       // The lost lease is untracked; the next heartbeat is a clean no-op.
-      const result = await run("workgraph_heartbeat", {}, local.dir);
+      const result = await run("ice_workgraph_heartbeat", {}, local.dir);
       expect(resultText(result)).toMatch(/no active lease/i);
     } finally {
       local.cleanup();

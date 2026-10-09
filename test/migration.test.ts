@@ -5,7 +5,7 @@
  * respect (live leases are never claimed, expired ones can be reclaimed),
  * metadata preservation on stamping, the CAS-throw idempotency contract of
  * the initialization entry — plus the subpath-export smoke tests
- * (`pi-workgraph/protocol` and the two adapter subpaths resolve through
+ * (`@zykairotis/ice-workgraph/protocol` and the two adapter subpaths resolve through
  * the package export map via Node's package self-reference).
  *
  * Timer discipline follows the repo convention (no fake timers anywhere):
@@ -61,7 +61,7 @@ const CONFIG: WorkgraphConfig = {
   workerIdOverride: WORKER,
 };
 
-const COMPAT_WARNING_MARKER = "workgraph-compat-legacy-issues is enabled";
+const COMPAT_WARNING_MARKER = "ice-workgraph-compat-legacy-issues is enabled";
 
 interface Harness {
   mock: MockPi;
@@ -112,7 +112,7 @@ function makeToolsMock(): MockPi {
   const mock = makeMockPi();
   bindExec((command, args, options) => mock.exec(command, args, options));
   registerWorkgraphTools(asExtensionAPI(mock));
-  mock.setFlag("workgraph-worker-id", WORKER);
+  mock.setFlag("ice-workgraph-worker-id", WORKER);
   setWorkerIdOverride(WORKER);
   return mock;
 }
@@ -163,22 +163,22 @@ describe("legacy visibility and compat dispatch", () => {
     }
   }, 30_000);
 
-  it("workgraph_ready excludes legacy issues by default; legacy: true lists them", async () => {
+  it("ice_workgraph_ready excludes legacy issues by default; legacy: true lists them", async () => {
     const graph = makeScratchGraph({ prefix: "migvis" });
     const mock = makeToolsMock();
     try {
       const legacyId = graph.createIssue("legacy artifact");
       const approvedId = graph.createIssue("approved work");
-      await runTool(mock, "workgraph_approve", { id: approvedId }, graph.dir);
+      await runTool(mock, "ice_workgraph_approve", { id: approvedId }, graph.dir);
 
-      const byDefault = await runTool(mock, "workgraph_ready", {}, graph.dir);
+      const byDefault = await runTool(mock, "ice_workgraph_ready", {}, graph.dir);
       const defaultText = JSON.stringify(byDefault.content);
       expect(defaultText).toContain(approvedId);
       expect(defaultText).not.toContain(legacyId);
 
       const legacy = await runTool(
         mock,
-        "workgraph_ready",
+        "ice_workgraph_ready",
         { legacy: true },
         graph.dir,
       );
@@ -212,7 +212,7 @@ describe("legacy visibility and compat dispatch", () => {
       );
       expect(compatWarnings).toHaveLength(1);
       // The warning names the setting and its compatibility effect.
-      expect(compatWarnings[0]).toContain("workgraph-compat-legacy-issues");
+      expect(compatWarnings[0]).toContain("ice-workgraph-compat-legacy-issues");
       expect(compatWarnings[0]).toContain("initializes lifecycle metadata");
       expect(coordinator.current()).toBeNull();
       expect(graph.showIssue(graph.seededIds[0]!).status).toBe("open");
@@ -244,7 +244,7 @@ describe("legacy visibility and compat dispatch", () => {
     });
     // accept-stall: the run parks in implementing — pinning the INITIALIZATION
     // ENTRY phase (legacy → implementing, never ready) before the normal
-    // flow moves on (risk note: only workgraph_approve produces ready).
+    // flow moves on (risk note: only ice_workgraph_approve produces ready).
     const fake = installFakeExecutor(mock.events, {
       roles: ["implementer"],
       behavior: "accept-stall",
@@ -279,10 +279,10 @@ describe("legacy visibility and compat dispatch", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Legacy initialization via workgraph_approve
+// Legacy initialization via ice_workgraph_approve
 // ---------------------------------------------------------------------------
 
-describe("legacy initialization via workgraph_approve", () => {
+describe("legacy initialization via ice_workgraph_approve", () => {
   it("approve on a legacy issue stamps v1 + ready + risk tier, preserving every pre-existing metadata key", async () => {
     const graph = makeScratchGraph({ prefix: "migapv" });
     const mock = makeToolsMock();
@@ -304,7 +304,7 @@ describe("legacy initialization via workgraph_approve", () => {
 
       await runTool(
         mock,
-        "workgraph_approve",
+        "ice_workgraph_approve",
         { id, acceptanceCriteria: "all tests green" },
         graph.dir,
       );
@@ -330,7 +330,7 @@ describe("legacy initialization via workgraph_approve", () => {
     const mock = makeToolsMock();
     try {
       const id = graph.createIssue("stamp me once");
-      await runTool(mock, "workgraph_approve", { id }, graph.dir);
+      await runTool(mock, "ice_workgraph_approve", { id }, graph.dir);
       expect(phaseOf(graph.showIssue(id))).toBe("ready");
 
       // Direct re-entry from <legacy>: the phase changed underneath
@@ -340,7 +340,7 @@ describe("legacy initialization via workgraph_approve", () => {
       ).rejects.toThrow(LifecycleError);
       // And the tool guard rejects re-approval of ready work.
       await expect(
-        runTool(mock, "workgraph_approve", { id }, graph.dir),
+        runTool(mock, "ice_workgraph_approve", { id }, graph.dir),
       ).rejects.toThrow(/Cannot approve/);
       // The issue is untouched by either failed re-entry.
       const shown = graph.showIssue(id);
@@ -543,10 +543,10 @@ describe("existing leases on legacy issues", () => {
 // ---------------------------------------------------------------------------
 
 describe("subpath exports (packaging smoke)", () => {
-  it("pi-workgraph/protocol subpath imports standalone with working parsers and no extension entry", async () => {
+  it("@zykairotis/ice-workgraph/protocol subpath imports standalone with working parsers and no extension entry", async () => {
     // Through the package self-reference — this exercises the exports map
     // itself (a relative import here would gut the test's purpose).
-    const proto = await import("pi-workgraph/protocol");
+    const proto = await import("@zykairotis/ice-workgraph/protocol");
 
     expect(proto.PROTOCOL_VERSION).toBe(1);
     expect(proto.CH.runRequest).toBe("workgraph:v1:run:request");
@@ -571,11 +571,11 @@ describe("subpath exports (packaging smoke)", () => {
   }, 30_000);
 
   it("adapter subpaths resolve through the export map", async () => {
-    const inSession = await import("pi-workgraph/adapters/in-session");
+    const inSession = await import("@zykairotis/ice-workgraph/adapters/in-session");
     expect(typeof inSession.registerInSessionExecutor).toBe("function");
     expect(inSession.IN_SESSION_EXECUTOR_ID).toBe("in-session");
 
-    const piSubagents = await import("pi-workgraph/adapters/pi-subagents");
+    const piSubagents = await import("@zykairotis/ice-workgraph/adapters/pi-subagents");
     expect(typeof piSubagents.registerPiSubagentsExecutor).toBe("function");
   }, 30_000);
 });

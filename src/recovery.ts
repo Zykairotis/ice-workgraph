@@ -25,7 +25,7 @@
  * reconciliation that crashes midway is safe to re-run — unprocessed issues
  * simply wait for the next start or the sweep.
  */
-import type { EventBus } from "@earendil-works/pi-coding-agent";
+import type { EventBus } from "@zykairotis/ice-coding-agent";
 import { AUDIT_PREFIX } from "./audit.ts";
 import { listComments, listInProgressUpdatedBefore } from "./bd.ts";
 import { leaseExpiresAtOf, leaseHolderOf, rfc3339 } from "./lease.ts";

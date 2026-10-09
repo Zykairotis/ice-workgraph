@@ -96,7 +96,7 @@ afterAll(async () => {
 
 describe("control-plane invariants (phase-0 pins, all flipped — see spec-phase-0)", () => {
   // FLIPPED IN PHASE 1 (run-scoped leases): phase 1 removed the unfenced
-  // fallback release. workgraph_release with no tracked lease now throws a
+  // fallback release. ice_workgraph_release with no tracked lease now throws a
   // fencing error instead of performing a bare `bd update --assignee ""
   // --status open`; the matcher is tightened to the fencing rejection
   // specifically (phase 0 review finding).
@@ -113,7 +113,7 @@ describe("control-plane invariants (phase-0 pins, all flipped — see spec-phase
         // Target behavior: an untracked release is refused with a
         // fencing error instead of being performed.
         await expect(
-          run("workgraph_release", { id }, graph.dir),
+          run("ice_workgraph_release", { id }, graph.dir),
         ).rejects.toThrow(/fenc/i);
         // And the foreign claim survives untouched.
         const shown = graph.showIssue(id);
@@ -165,13 +165,13 @@ describe("control-plane invariants (phase-0 pins, all flipped — see spec-phase
     30_000,
   );
 
-  // FLIPPED IN PHASE 3 (lifecycle + judgment gate): workgraph_close now
+  // FLIPPED IN PHASE 3 (lifecycle + judgment gate): ice_workgraph_close now
   // permits only phase-`accepted` work. The holder still passes the fencing
   // check (epoch + holder match) — it is the JUDGMENT guard that rejects:
   // this issue was self-claimed with no lifecycle phase, so it has not
   // passed judgment and may not be closed by its implementer. Closure
   // arrives only through the coordinator's policy-approved tail or an
-  // audited workgraph_override.
+  // audited ice_workgraph_override.
   it(
     "successful implementation cannot close the issue directly",
     async () => {
@@ -183,12 +183,12 @@ describe("control-plane invariants (phase-0 pins, all flipped — see spec-phase
         });
         // Claim through the tool so THIS process IS the lease holder —
         // the fencing check passes and only a judgment gate could refuse.
-        await run("workgraph_claim", { id }, graph.dir);
+        await run("ice_workgraph_claim", { id }, graph.dir);
         // Target behavior: the implementer's close is rejected pending
         // judgment.
         await expect(
           run(
-            "workgraph_close",
+            "ice_workgraph_close",
             { id, reason: "implementation finished" },
             graph.dir,
           ),

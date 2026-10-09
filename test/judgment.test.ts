@@ -130,7 +130,7 @@ function metadataOf(graph: ScratchGraph, id: string): Record<string, unknown> {
   return (graph.showIssue(id).metadata ?? {}) as Record<string, unknown>;
 }
 
-/** Approve an issue the way workgraph_approve does, from outside this
+/** Approve an issue the way ice_workgraph_approve does, from outside this
  *  process (setup writes go through scratch's synchronous bd). */
 function approve(
   graph: ScratchGraph,
@@ -189,7 +189,7 @@ describe("lifecycle transitions", () => {
     bindExec((command, args, options) => mock.exec(command, args, options));
     const graph = makeScratchGraph({ prefix: "lcwalk" });
     try {
-      // Legacy entry: <none> → ready stamps v1 (workgraph_approve's edge).
+      // Legacy entry: <none> → ready stamps v1 (ice_workgraph_approve's edge).
       const id = graph.createIssue("full lifecycle walk");
       expect(lifecycleVersionOf(graph.showIssue(id))).toBeUndefined();
       await transition(graph.dir, id, undefined, "ready");

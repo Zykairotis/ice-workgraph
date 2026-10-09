@@ -35,7 +35,7 @@
  *     effective model can differ from the requested one — see
  *     {@link splitProvider}.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@zykairotis/ice-coding-agent";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
@@ -402,7 +402,7 @@ export function registerPiSubagentsExecutor(
     (range !== undefined && !subagentsVersionInRange(version, range))
   ) {
     warnOnce(
-      `[pi-workgraph] pi-subagents bridge disabled: ${
+      `[ice-workgraph] pi-subagents bridge disabled: ${
         version === undefined
           ? `no installed ${SUBAGENTS_PACKAGE_NAME} package found (version probe)`
           : `installed version ${version} is outside the supported range ${range}.x`
@@ -901,7 +901,7 @@ export function registerPiSubagentsExecutor(
         // Unexpected background handoff is nonterminal. Keep ownership until
         // a terminal response or an acknowledged cancellation, never judge it.
         warnOnce(
-          "[pi-workgraph] upstream returned a background launch receipt despite foregroundOnly; run remains pending",
+          "[ice-workgraph] upstream returned a background launch receipt despite foregroundOnly; run remains pending",
         );
         return;
       }
@@ -914,7 +914,7 @@ export function registerPiSubagentsExecutor(
         // Shape drift from the harvest: the version gate is the primary
         // guard; this is the secondary net (spec error-handling row).
         warnOnce(
-          `[pi-workgraph] pi-subagents response payload failed validation (requestId ${run.requestId}) — upstream shape drift?`,
+          `[ice-workgraph] pi-subagents response payload failed validation (requestId ${run.requestId}) — upstream shape drift?`,
         );
         if (!run.accepted) {
           pi.events.emit(CH.runRejected, {

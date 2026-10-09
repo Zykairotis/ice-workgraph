@@ -134,7 +134,7 @@ describe("claim gating", () => {
   }, 30_000);
 
   it("uninitialized directory: tick is inert, never throws", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "pi-workgraph-noinit-"));
+    const dir = mkdtempSync(join(tmpdir(), "ice-workgraph-noinit-"));
     try {
       const { mock, controller, ectx } = makeHarness(dir);
       await controller.tick(ectx.ctx);
@@ -169,7 +169,7 @@ describe("claim gating", () => {
       buildWorkPrompt(current!.issue, current!.lease),
     );
     expect(String(wake.message.content)).toContain(issueId);
-    expect(String(wake.message.content)).toContain("workgraph_close");
+    expect(String(wake.message.content)).toContain("ice_workgraph_close");
     expect(wake.options).toEqual({ triggerTurn: true, deliverAs: "nextTurn" });
 
     // Status bar shows the claim + countdown.
@@ -214,7 +214,7 @@ describe("claim gating", () => {
     await controller.tick(ectx.ctx);
     const first = controller.current()!.issue.id;
 
-    // workgraph_close / workgraph_release untrack the lease — the registry
+    // ice_workgraph_close / ice_workgraph_release untrack the lease — the registry
     // is the tools→dispatch bridge; simulate the tool side of it.
     untrackLease(graph.dir, first);
     await controller.tick(ectx.ctx);

@@ -24,7 +24,7 @@
  *  - NO EXECUTOR → NO CLAIM: discovery precedes any claim attempt; zero
  *    offers leave the ready pool untouched (the phase-0 pin).
  *  - APPROVED WORK ONLY: the coordinator claims lifecycle-v1 issues in
- *    phase "ready" (approved via workgraph_approve); legacy issues need the
+ *    phase "ready" (approved via ice_workgraph_approve); legacy issues need the
  *    explicit `compatLegacyIssues` opt-in and receive lifecycle metadata at
  *    claim. Because bd's `ready --claim` is metadata-blind, claims go
  *    through the equally-atomic claim-by-id path after client-side
@@ -49,7 +49,7 @@
 import type {
   ExtensionAPI,
   ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+} from "@zykairotis/ice-coding-agent";
 import { recordLeaseEvent } from "./audit.ts";
 import {
   BdError,
@@ -63,6 +63,7 @@ import {
 } from "./bd.ts";
 import type { WorkgraphConfig } from "./config.ts";
 import { DISPATCH_FLAG } from "./dispatch.ts";
+import { canMutateWorkgraph } from "./ice-authorization.ts";
 import {
   discoverExecutors,
   ExecutorSelectionError,
@@ -173,7 +174,7 @@ import {
 
 /**
  * Kill switch: the coordinator inherits dispatch's flag name — the operator
- * contract ("workgraph-dispatch=false means no autonomous claiming") is
+ * contract ("ice-workgraph-dispatch=false means no autonomous claiming") is
  * unchanged even though the machinery underneath was replaced.
  */
 export const COORDINATOR_FLAG = DISPATCH_FLAG;
@@ -338,14 +339,14 @@ export function registerCoordinator(
     const expiresAt = leaseExpiresAtOf(issue);
     if (expiresAt === undefined) {
       warnOnce(
-        `[pi-workgraph] legacy issue ${issue.id} has lease_holder ("${holder}") but no lease_expires_at — treating it as leased, never claiming it`,
+        `[ice-workgraph] legacy issue ${issue.id} has lease_holder ("${holder}") but no lease_expires_at — treating it as leased, never claiming it`,
       );
       return true;
     }
     const expiryMs = Date.parse(expiresAt);
     if (Number.isNaN(expiryMs)) {
       warnOnce(
-        `[pi-workgraph] legacy issue ${issue.id} has an unparseable lease_expires_at — treating it as leased, never claiming it`,
+        `[ice-workgraph] legacy issue ${issue.id} has an unparseable lease_expires_at — treating it as leased, never claiming it`,
       );
       return true;
     }
@@ -405,17 +406,17 @@ export function registerCoordinator(
     description:
       "Enable the workgraph coordinator (discovers executors, claims ready issues under workflow-run leases, delegates over the executor protocol); set to false for tools + context injection without autonomy",
     type: "boolean",
-    default: true,
+    default: false,
   });
 
   function enabled(): boolean {
-    return pi.getFlag(COORDINATOR_FLAG) !== false;
+    return pi.getFlag(COORDINATOR_FLAG) === true;
   }
 
   function logSkipOnce(reason: string): void {
     if (state.lastSkipLog === reason) return;
     state.lastSkipLog = reason;
-    console.error(`[pi-workgraph] coordinator skipping: ${reason}`);
+    console.error(`[ice-workgraph] coordinator skipping: ${reason}`);
   }
 
   function clearSkipLog(): void {
@@ -2359,6 +2360,7 @@ export function registerCoordinator(
   // -------------------------------------------------------------------------
 
   async function tick(ctx: ExtensionContext): Promise<void> {
+    if (!enabled() || !canMutateWorkgraph(ctx)) return;
     if (state.ticking) return; // reentrant tick — checked/set before any await
     if (state.reconciling) return; // recovery first — ticks resume after
     state.ticking = true;
@@ -2398,7 +2400,7 @@ export function registerCoordinator(
     }
 
     // ARRAY LENGTH is the readiness signal, never exit codes. Fetch
-    // UNBOUNDED (`-n 0`, the workgraph_ready pattern) and filter
+    // UNBOUNDED (`-n 0`, the ice_workgraph_ready pattern) and filter
     // client-side: lifecycle phase is metadata, which bd's ready query
     // cannot see — a capped probe would let a page of legacy issues ahead
     // in bd's ordering starve newly approved work indefinitely (the
@@ -2410,7 +2412,7 @@ export function registerCoordinator(
     }
 
     // APPROVED WORK ONLY: lifecycle-v1 issues must be in phase "ready"
-    // (workgraph_approve); legacy issues (no lifecycle version) dispatch
+    // (ice_workgraph_approve); legacy issues (no lifecycle version) dispatch
     // only under the explicit compat opt-in (README "Legacy compatibility")
     // — and even under compat, a legacy issue carrying a live lease is
     // respected, never claimed.
@@ -2432,16 +2434,16 @@ export function registerCoordinator(
     // mitigation for users left on compat forever).
     if (compat && eligible.some((issue) => !isLifecycleV1(issue))) {
       warnOnce(
-        "[pi-workgraph] workgraph-compat-legacy-issues is enabled: legacy issues " +
+        "[ice-workgraph] ice-workgraph-compat-legacy-issues is enabled: legacy issues " +
           "(no workgraph_lifecycle_version) are auto-dispatched, and each claim " +
           "initializes lifecycle metadata and enters phase " +
           '"implementing". Prefer approving work ' +
-          "explicitly with workgraph_approve.",
+          "explicitly with ice_workgraph_approve.",
       );
     }
     if (eligible.length === 0) {
       logSkipOnce(
-        "ready pool has no dispatchable issues — approve drafts with workgraph_approve; legacy auto-dispatch requires workgraph-compat-legacy-issues",
+        "ready pool has no dispatchable issues — approve drafts with ice_workgraph_approve; legacy auto-dispatch requires ice-workgraph-compat-legacy-issues",
       );
       return;
     }
@@ -2923,7 +2925,7 @@ export function registerCoordinator(
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(
-          `[pi-workgraph] coordinator teardown could not reset ${run.lease.issueId} for redispatch: ${msg}`,
+          `[ice-workgraph] coordinator teardown could not reset ${run.lease.issueId} for redispatch: ${msg}`,
         );
       }
       try {
@@ -2931,7 +2933,7 @@ export function registerCoordinator(
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(
-          `[pi-workgraph] coordinator teardown could not release ${run.lease.issueId}: ${msg}`,
+          `[ice-workgraph] coordinator teardown could not release ${run.lease.issueId}: ${msg}`,
         );
       }
     }
@@ -3274,7 +3276,7 @@ export function registerCoordinator(
   }
 
   pi.on("session_start", (_event, ctx) => {
-    if (!enabled()) return;
+    if (!enabled() || !canMutateWorkgraph(ctx)) return;
     if (state.timer) clearInterval(state.timer); // idempotent restart
     const config = deps.getConfig();
     state.timer = setInterval(() => void tick(ctx), config.pollMs);
@@ -3288,7 +3290,7 @@ export function registerCoordinator(
 
   // The idle edge — poll immediately instead of waiting out the interval.
   pi.on("agent_settled", (_event, ctx) => {
-    if (!enabled()) return;
+    if (!enabled() || !canMutateWorkgraph(ctx)) return;
     return tick(ctx);
   });
 

@@ -1,17 +1,16 @@
 /**
- * pi-workgraph — Pi extension exposing the beads (bd) work graph as six
+ * ICE Workgraph — ICE extension exposing the beads (bd) work graph as nine
  * typed tools for coordinated agent workers, plus (Phase 3) an in-session
- * dispatch loop, per-turn context injection, a compaction takeover, and a
+ * dispatch loop, per-turn context injection, ICE-owned compaction, and a
  * status-bar surface.
  *
- * Loads with no build step: Pi's jiti loader consumes this TypeScript
- * directly via the `"pi": { "extensions": ["./src/index.ts"] }` manifest.
+ * Loads with no build step: ICE's jiti loader consumes this TypeScript
+ * directly via the `"ice": { "extensions": ["./src/index.ts"] }` manifest.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@zykairotis/ice-coding-agent";
 import { registerInSessionExecutor } from "./adapters/in-session.ts";
 import { isPiSubagentProcess, registerPiSubagentsExecutor } from "./adapters/pi-subagents.ts";
 import { bdBinaryAvailable, bindExec } from "./bd.ts";
-import { registerCompactionTakeover } from "./compaction.ts";
 import { registerConfigFlags, resolveConfig } from "./config.ts";
 import { registerContextInjection } from "./context.ts";
 import { registerCoordinator } from "./coordinator.ts";
@@ -19,16 +18,15 @@ import { registerCoordinator } from "./coordinator.ts";
 // coordinator owns scheduling; MIN_POLL_MS remains the wiring-layer floor.
 import { MIN_POLL_MS } from "./dispatch.ts";
 import { noteSessionId, setWorkerIdOverride } from "./identity.ts";
-import { heldLeases } from "./lease.ts";
 import { registerSweep } from "./sweep.ts";
 import { registerWorkgraphTools } from "./tools.ts";
 
-export default function piWorkgraph(pi: ExtensionAPI): void {
+export default function iceWorkgraph(pi: ExtensionAPI): void {
   registerConfigFlags(pi);
   bindExec((command, args, options) => pi.exec(command, args, options));
   registerWorkgraphTools(pi);
   // Executor children retain tools, while scheduling and recovery belong to
-  // the parent coordinator. Pi runtime detection stays in the Pi adapter.
+  // the parent coordinator. pi-subagents child detection stays in that optional adapter.
   if (isPiSubagentProcess()) return;
 
   // The in-session compatibility executor MUST register before the
@@ -63,14 +61,14 @@ export default function piWorkgraph(pi: ExtensionAPI): void {
   // the reconciling latch), then the poll timer; plus an agent_settled tick
   // and an idempotent session_shutdown graceful teardown (in-session runs
   // release immediately; isolated executions get cancel-first semantics).
-  const coordinator = registerCoordinator(pi, {
+  registerCoordinator(pi, {
     getConfig: () => {
       const config = resolveConfig(pi);
       return { ...config, pollMs: Math.max(config.pollMs, MIN_POLL_MS) };
     },
   });
 
-  // The production expiry sweep: every session runs one. Each tick calls
+  // The production expiry sweep: trusted ICE build sessions only. Each tick calls
   // findExpired() and reclaims each expired lease (fenced — concurrent
   // sweepers elect exactly one winner), then releases it so the issue lands
   // back in the ready pool. The same MIN_POLL_MS floor as dispatch is
@@ -87,28 +85,6 @@ export default function piWorkgraph(pi: ExtensionAPI): void {
   });
 
   registerContextInjection(pi);
-  registerCompactionTakeover(pi, {
-    getCurrent: (cwd) => {
-      // The coordinator knows the in-flight run (active run first, else the
-      // latest run parked in judging) — the summary must retain its run id,
-      // phase, attempt, and evidence refs, not just the issue title; fall
-      // back to the held-lease registry for work the model claimed itself
-      // via workgraph_claim.
-      const run = coordinator.current();
-      if (run) {
-        return {
-          issueId: run.issue.id,
-          title: run.issue.title,
-          workflowRunId: run.workflowRunId,
-          phase: run.phase,
-          attempt: run.attempt,
-          ...(run.evidence !== undefined ? { evidence: run.evidence } : {}),
-        };
-      }
-      const lease = heldLeases(cwd)[0];
-      return lease ? { issueId: lease.issueId } : null;
-    },
-  });
 
   pi.on("session_start", (_event, ctx) => {
     // Probe bd availability up front (the tools throw a one-line install

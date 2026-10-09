@@ -17,7 +17,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
   ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
+} from "@zykairotis/ice-coding-agent";
 
 export interface RecordedExec {
   command: string;
@@ -185,7 +185,11 @@ export function makeMockPi(): MockPi {
   const execCalls: RecordedExec[] = [];
   const tools = new Map<string, AnyToolDefinition>();
   const handlers = new Map<string, ((...args: unknown[]) => unknown)[]>();
-  const flagValues = new Map<string, boolean | string | undefined>();
+  // Most legacy coordinator suites intentionally exercise opt-in dispatch.
+  // Production default is false; the test harness explicitly opts in.
+  const flagValues = new Map<string, boolean | string | undefined>([
+    ["ice-workgraph-dispatch", true],
+  ]);
   const flagDefaults = new Map<string, boolean | string | undefined>();
   const sendMessages: RecordedMessage[] = [];
   const entries: RecordedEntry[] = [];
@@ -358,7 +362,11 @@ export function makeToolContext(
 ): ExtensionContext {
   return {
     cwd,
-    sessionManager: { getSessionId: () => sessionId },
+    isProjectTrusted: () => true,
+    sessionManager: {
+      getSessionId: () => sessionId,
+      getBranch: () => [{ type: "custom", customType: "ice-safe-verify-state", data: { mode: "build" } }],
+    },
   } as unknown as ExtensionContext;
 }
 
@@ -384,6 +392,9 @@ export interface EventContextOptions {
   auth?: { ok: true; apiKey?: string; headers?: Record<string, string>; env?: Record<string, string> } | { ok: false; error: string };
   /** `ctx.thinkingLevel` (default undefined). */
   thinkingLevel?: unknown;
+  /** Authorization for the ICE mutation gate (default: trusted build). */
+  trusted?: boolean;
+  iceMode?: "plan" | "build";
 }
 
 /**
@@ -413,7 +424,9 @@ export function makeEventContext(
     cwd,
     sessionManager: {
       getSessionId: () => opts.sessionId ?? "mock-session-0123456789abcdef",
+      getBranch: () => [{ type: "custom", customType: "ice-safe-verify-state", data: { mode: opts.iceMode ?? "build" } }],
     },
+    isProjectTrusted: () => opts.trusted ?? true,
     mode: opts.mode ?? "tui",
     hasUI: opts.hasUI ?? true,
     ui: {

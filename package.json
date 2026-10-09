@@ -1,21 +1,21 @@
 {
-  "name": "pi-workgraph",
-  "version": "0.3.1",
-  "description": "Pi extension exposing the beads (bd) work graph as typed tools for coordinated agent workers",
+  "name": "@zykairotis/ice-workgraph",
+  "version": "0.1.0",
+  "description": "ICE extension for durable, lease-fenced Beads task coordination and reviewed multi-agent work",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gjtorikian/pi-workgraph.git"
+    "url": "git+https://github.com/Zykairotis/ice-workgraph.git"
   },
-  "homepage": "https://github.com/gjtorikian/pi-workgraph#readme",
+  "homepage": "https://github.com/Zykairotis/ice-workgraph#readme",
   "bugs": {
-    "url": "https://github.com/gjtorikian/pi-workgraph/issues"
+    "url": "https://github.com/Zykairotis/ice-workgraph/issues"
   },
   "engines": {
-    "node": ">= 22"
+    "node": ">=22.19.0"
   },
-  "pi": {
+  "ice": {
     "extensions": [
       "./src/index.ts"
     ]
@@ -32,12 +32,13 @@
     "scripts",
     "docs",
     "README.md",
-    "LICENSE"
+    "UPSTREAM.md",
+    "LICENSE.txt"
   ],
   "keywords": [
-    "pi",
-    "pi-extension",
-    "pi-package",
+    "ice",
+    "ice-extension",
+    "ice-package",
     "beads",
     "bd",
     "workgraph",
@@ -61,19 +62,20 @@
     "test:recovery": "vitest run test/recovery.test.ts",
     "test:adapter": "vitest run test/pi-subagents-adapter.test.ts",
     "test:migration": "vitest run test/migration.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:branding": "node scripts/check-branding.mjs"
   },
   "peerDependencies": {
-    "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*",
+    "@zykairotis/ice-ai": "*",
+    "@zykairotis/ice-coding-agent": "*",
     "typebox": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.84.1",
-    "@earendil-works/pi-coding-agent": "^0.84.1",
-    "@types/node": "^26.2.0",
-    "typebox": "^1.3.12",
-    "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "@zykairotis/ice-ai": "0.83.0",
+    "@zykairotis/ice-coding-agent": "0.83.0",
+    "@types/node": "26.2.0",
+    "typebox": "1.3.12",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
   }
 }

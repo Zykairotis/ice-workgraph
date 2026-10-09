@@ -127,7 +127,7 @@ function metadataOf(graph: ScratchGraph, id: string): Record<string, unknown> {
   return (graph.showIssue(id).metadata ?? {}) as Record<string, unknown>;
 }
 
-/** Approve an issue the way workgraph_approve does. */
+/** Approve an issue the way ice_workgraph_approve does. */
 function approve(
   graph: ScratchGraph,
   id: string,

@@ -6,7 +6,7 @@
  * bd itself.
  */
 import { execFileSync } from "node:child_process";
-import { chmodSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -145,11 +145,11 @@ describe("git push guard", () => {
       });
 
       // Guard at pre-push, original preserved next to it, config stamped.
-      expect(readFileSync(hook, "utf8")).toContain("PI_WORKGRAPH_PUSH_GUARD");
+      expect(readFileSync(hook, "utf8")).toContain("ICE_WORKGRAPH_PUSH_GUARD");
       expect(statSync(hook).mode & 0o111).not.toBe(0);
       expect(readFileSync(`${hook}.pre-workgraph`, "utf8")).toBe(fake);
       expect(
-        execFileSync("git", ["config", "--get", "workgraph.stackIssue"], {
+        execFileSync("git", ["config", "--get", "ice.workgraphStackIssue"], {
           cwd: graph.dir,
           encoding: "utf8",
         }).trim(),
@@ -171,8 +171,33 @@ describe("git push guard", () => {
         cwd: graph.dir,
         encoding: "utf8",
       });
-      expect(readFileSync(hook, "utf8")).toContain("PI_WORKGRAPH_PUSH_GUARD");
+      expect(readFileSync(hook, "utf8")).toContain("ICE_WORKGRAPH_PUSH_GUARD");
       expect(readFileSync(`${hook}.pre-workgraph`, "utf8")).toBe(fake);
+    } finally {
+      graph.cleanup();
+    }
+  }, 60_000);
+
+  it("install replaces a guard installed before the rebrand instead of chaining it", () => {
+    const graph = makeScratchGraph({ prefix: "guardlegacy" });
+    try {
+      const id = graph.createIssue("sentinel: the stack");
+      const hooksDir = execFileSync(
+        "git",
+        ["rev-parse", "--git-path", "hooks"],
+        { cwd: graph.dir, encoding: "utf8" },
+      ).trim();
+      const hook = join(hooksDir, "pre-push");
+      writeFileSync(hook, '#!/usr/bin/env node\nconst MARKER = "PI_WORKGRAPH_PUSH_GUARD";\n');
+      chmodSync(hook, 0o755);
+
+      execFileSync(process.execPath, [SCRIPT, "install", "--issue", id], {
+        cwd: graph.dir,
+        encoding: "utf8",
+      });
+
+      expect(readFileSync(hook, "utf8")).toContain("ICE_WORKGRAPH_PUSH_GUARD");
+      expect(existsSync(`${hook}.pre-workgraph`)).toBe(false);
     } finally {
       graph.cleanup();
     }

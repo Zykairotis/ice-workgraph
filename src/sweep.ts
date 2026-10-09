@@ -14,8 +14,9 @@
  * lands BEFORE the assignee overwrite, and post-write verification elects
  * exactly one winner when reclaimers race (same shape as acquisition).
  */
-import type { EventBus, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { EventBus, ExtensionAPI, ExtensionContext } from "@zykairotis/ice-coding-agent";
 import { recordLeaseEvent } from "./audit.ts";
+import { canMutateWorkgraph } from "./ice-authorization.ts";
 import {
   bdBinaryAvailable,
   ensureWorkspace,
@@ -294,9 +295,10 @@ export async function reclaimAndLeaveReady(
 
 // ---------------------------------------------------------------------------
 // Production sweep wiring: a serialized timer that runs findExpired() +
-// reclaim() every tick, mirroring registerDispatch's discipline. Every Pi
-// session runs one; cross-process safety comes from the fencing epochs (two
-// sweepers racing one expired lease elect exactly one winner).
+// reclaim() every tick, mirroring registerDispatch's discipline. Every ICE
+// session authorized for the sweep runs one; cross-process safety comes from
+// the fencing epochs (two sweepers racing one expired lease elect exactly one
+// winner).
 // ---------------------------------------------------------------------------
 
 export interface SweepDeps {
@@ -341,7 +343,7 @@ export function registerSweep(pi: ExtensionAPI, deps: SweepDeps): SweepControlle
   function logSkipOnce(reason: string): void {
     if (state.lastSkipLog === reason) return;
     state.lastSkipLog = reason;
-    console.error(`[pi-workgraph] sweep skipping: ${reason}`);
+    console.error(`[ice-workgraph] sweep skipping: ${reason}`);
   }
 
   function clearSkipLog(): void {
@@ -349,6 +351,7 @@ export function registerSweep(pi: ExtensionAPI, deps: SweepDeps): SweepControlle
   }
 
   async function tick(ctx: ExtensionContext): Promise<void> {
+    if (!canMutateWorkgraph(ctx)) return;
     if (state.ticking) return; // reentrant tick — checked/set before any await
     state.ticking = true;
     try {
@@ -406,6 +409,7 @@ export function registerSweep(pi: ExtensionAPI, deps: SweepDeps): SweepControlle
   }
 
   pi.on("session_start", (_event, ctx) => {
+    if (!canMutateWorkgraph(ctx)) return;
     if (state.timer) clearInterval(state.timer); // idempotent restart
     const config = deps.getConfig();
     state.timer = setInterval(() => void tick(ctx), config.sweepIntervalMs);

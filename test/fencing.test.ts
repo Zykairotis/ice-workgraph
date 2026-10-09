@@ -54,7 +54,7 @@ function runTool(name: string, params: unknown, cwd: string) {
 beforeAll(() => {
   mock = makeMockPi();
   bindExec((command, args, options) => mock.exec(command, args, options));
-  // The run-scoped suite drives workgraph_close/workgraph_heartbeat — the
+  // The run-scoped suite drives ice_workgraph_close/ice_workgraph_heartbeat — the
   // tool-level holder writes — through their fencing gates.
   registerWorkgraphTools(asExtensionAPI(mock));
 });
@@ -189,12 +189,12 @@ describe("run-scoped fencing (phase 1)", () => {
       // The tool-level holder writes fence on the TRACKED actor. Each fenced
       // failure untracks, so re-track A's stale lease before each attempt.
       trackLease(graph.dir, lease, runA);
-      await expect(runTool("workgraph_close", { id }, graph.dir)).rejects.toThrow(
+      await expect(runTool("ice_workgraph_close", { id }, graph.dir)).rejects.toThrow(
         FencingError,
       );
       trackLease(graph.dir, lease, runA);
       await expect(
-        runTool("workgraph_heartbeat", {}, graph.dir),
+        runTool("ice_workgraph_heartbeat", {}, graph.dir),
       ).rejects.toThrow(/reclaimed/i);
 
       // Run B's takeover is untouched by any of the stale attempts.
@@ -246,7 +246,7 @@ describe("run-scoped fencing (phase 1)", () => {
         FencingError,
       );
       trackLease(graph.dir, lease, runA);
-      await expect(runTool("workgraph_close", { id }, graph.dir)).rejects.toThrow(
+      await expect(runTool("ice_workgraph_close", { id }, graph.dir)).rejects.toThrow(
         FencingError,
       );
 

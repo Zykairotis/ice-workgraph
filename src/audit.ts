@@ -57,7 +57,7 @@ export async function recordLeaseEvent(
     const msg = e instanceof Error ? e.message : String(e);
     // Loud, but non-blocking — the lease op that triggered this must proceed.
     console.error(
-      `[pi-workgraph] AUDIT WRITE FAILED (${kind} on ${issueId}): ${msg}`,
+      `[ice-workgraph] AUDIT WRITE FAILED (${kind} on ${issueId}): ${msg}`,
     );
   }
 }

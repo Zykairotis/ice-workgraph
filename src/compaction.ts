@@ -1,5 +1,5 @@
 /**
- * Compaction takeover (Full tier): `session_before_compact` → Pi's exported
+ * Compaction takeover (Full tier): `session_before_compact` → the ICE host's exported
  * `compact()` with custom instructions that preserve the task narrative a
  * default summary can drop — the in-flight issue id + title, what's been
  * tried, and the acceptance criteria. Pre-existing user instructions
@@ -13,8 +13,8 @@
  * unresolvable credentials (`auth.ok === false`), or a thrown `compact()` —
  * returns `undefined` so the default compaction proceeds.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { compact } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@zykairotis/ice-coding-agent";
+import { compact } from "@zykairotis/ice-coding-agent";
 import { heldLeases } from "./lease.ts";
 
 /** The in-flight work the summary must retain. */
@@ -34,7 +34,7 @@ export interface CurrentWork {
 export interface CompactionTakeoverOptions {
   /**
    * The summarizer — injected for tests (the live `compact()` call is a
-   * Phase 4 manual smoke item); defaults to Pi's exported `compact()`.
+   * Phase 4 manual smoke item); defaults to the ICE host's exported `compact()`.
    */
   compactFn?: typeof compact;
   /**

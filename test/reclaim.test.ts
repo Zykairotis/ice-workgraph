@@ -119,12 +119,12 @@ describe("production sweep wiring (phase 1)", () => {
       piWorkgraph(asExtensionAPI(mock));
       // Sweep-only session: the dispatch loop would otherwise claim ready
       // issues in this scratch graph (workgraph-dispatch is the kill switch).
-      mock.setFlag("workgraph-dispatch", false);
-      mock.setFlag("workgraph-worker-id", "rclw-sweeper");
-      mock.setFlag("workgraph-lease-ttl-ms", String(TTL));
+      mock.setFlag("ice-workgraph-dispatch", false);
+      mock.setFlag("ice-workgraph-worker-id", "rclw-sweeper");
+      mock.setFlag("ice-workgraph-lease-ttl-ms", String(TTL));
       // index.ts floors the interval to MIN_POLL_MS (5 s) — the wait below
       // budgets for that floor, proving the floor path too.
-      mock.setFlag("workgraph-sweep-interval-ms", "1");
+      mock.setFlag("ice-workgraph-sweep-interval-ms", "1");
 
       const id = graph.createIssue("orphaned by a dead run");
       const outcome = await acquireLease(graph.dir, {

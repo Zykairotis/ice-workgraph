@@ -5,11 +5,12 @@
  * for lack of one. Dispatch is the only caller (acquire/heartbeat/release
  * edges); there is no timer here.
  */
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@zykairotis/ice-coding-agent";
+import { ICE_WORKGRAPH_STATUS_KEY } from "./branding.ts";
 import type { Lease } from "./types.ts";
 
 /** The `setStatus` key this extension owns. */
-export const STATUS_KEY = "workgraph";
+export const STATUS_KEY = ICE_WORKGRAPH_STATUS_KEY;
 
 /** `m:ss` countdown, floored at `0:00` (never negative). */
 export function formatCountdown(msRemaining: number): string {

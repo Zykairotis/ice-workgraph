@@ -20,7 +20,7 @@
  * The fake never imports pi-subagents either — the whole point of the
  * event-names-only bridge is that neither side needs the package installed.
  */
-import type { EventBus } from "@earendil-works/pi-coding-agent";
+import type { EventBus } from "@zykairotis/ice-coding-agent";
 import { UPSTREAM_EVENTS } from "../../src/adapters/pi-subagents.ts";
 
 /** One scripted upstream behavior; arrays consume in request order (the

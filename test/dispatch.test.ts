@@ -6,7 +6,7 @@
  * `triggerTurn: true, deliverAs: "nextTurn"` and the DISPATCH_MESSAGE_TYPE
  * customType). Deprecation-in-place means this must keep working
  * unmodified: a 5-issue pool drains through a stub work handler — the
- * "model" immediately completes each dispatched issue via workgraph_close,
+ * "model" immediately completes each dispatched issue via ice_workgraph_close,
  * exactly as the legacy wake prompt instructs.
  *
  * Assertions run against the bd exec log (`getExecLog`): every claim went
@@ -79,15 +79,15 @@ afterAll(async () => {
 });
 
 /** The stub model: close whatever dispatch just assigned. Since phase 3,
- *  workgraph_close permits only phase-`accepted` issues (the judgment
+ *  ice_workgraph_close permits only phase-`accepted` issues (the judgment
  *  gate) — the deprecated dispatch loop stamps no lifecycle metadata, so
  *  the stub records the acceptance the way src/tools.test.ts's close tests
  *  do before closing. (Latent phase-3 breakage: this suite predates the
  *  accepted-only guard and was never run against it — the branch has no CI
  *  history; discovered and fixed during phase-4 validation.) */
 async function completeCurrentIssue(issueId: string): Promise<void> {
-  const close = mock.tools.get("workgraph_close");
-  if (!close) throw new Error("workgraph_close not registered");
+  const close = mock.tools.get("ice_workgraph_close");
+  if (!close) throw new Error("ice_workgraph_close not registered");
   graph.bd([
     "update",
     issueId,

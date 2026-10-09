@@ -26,7 +26,7 @@ writes them.
 | ------------------------------------------- | ----------------------------------- |
 | no sentinel configured                      | allowed (hook inert)                |
 | never leased, or released                   | allowed                             |
-| live lease, holder is `$WORKGRAPH_WORKER_ID`| allowed (your own restack window)   |
+| live lease, holder is `$ICE_WORKGRAPH_WORKER_ID`| allowed (your own restack window)   |
 | live lease, anyone else                     | **blocked**, with holder + expiry   |
 | lease expired                               | allowed (expired = reclaimable)     |
 | unparseable expiry / bd unreachable         | **blocked** (fail closed)           |
@@ -51,7 +51,7 @@ node scripts/git-push-guard.mjs install --issue <sentinel-id>
 ```
 
 This copies the guard to the repo's hook path and sets
-`git config workgraph.stackIssue <sentinel-id>`. In bd repos — where
+`git config ice.workgraphStackIssue <sentinel-id>`. In bd repos — where
 `core.hooksPath` is `.beads/hooks` and bd manages its own `pre-push` —
 the existing hook is preserved as `pre-push.pre-workgraph` and chained:
 the guard runs first, and on allow executes the original with the same
@@ -63,11 +63,11 @@ regenerates its hooks can overwrite the guard; re-run install.)
 ```bash
 # The restacker announces one stable identity to both its claims and its
 # child processes (the hook compares it to lease_holder for self-pass):
-WORKGRAPH_WORKER_ID=restacker@myhost pi
+ICE_WORKGRAPH_WORKER_ID=restacker@myhost ice --ice-mode build
 ```
 
 ```text
-> claim the sentinel issue          # workgraph_claim stamps the lease;
+> claim the sentinel issue          # ice_workgraph_claim stamps the lease;
                                     # heartbeats renew it while you work
 … restack, force-push (own pushes pass) …
 > release the sentinel issue        # pushes flow again everywhere
